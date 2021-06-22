@@ -1,0 +1,226 @@
+(efficientPS_env) yannick@yannick-ubuntu:~/Documents/SS21/crop_aware_PS/EfficientPS$ python tools/test.py efficientPS_singlegpu_sample.py ${checkpoints/efficientPS_b0.pth} --eval panoptic
+Traceback (most recent call last):
+  File "tools/test.py", line 4, in <module>
+    import mmcv
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/__init__.py", line 8, in <module>
+    from .video import *
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/__init__.py", line 3, in <module>
+    from .optflow import (dequantize_flow, flow_warp, flowread, flowwrite,
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/optflow.py", line 4, in <module>
+    from mmcv._ext import flow_warp_c
+  File "mmcv/video/optflow_warp/flow_warp_module.pyx", line 1, in init mmcv._ext
+ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
+
+(efficientPS_env) yannick@yannick-ubuntu:~/Documents/SS21/crop_aware_PS/EfficientPS$ python tools/test.py efficientPS_singlegpu_sample.py ${checkpoints/model.pth} --eval panoptic
+Traceback (most recent call last):
+  File "tools/test.py", line 4, in <module>
+    import mmcv
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/__init__.py", line 8, in <module>
+    from .video import *
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/__init__.py", line 3, in <module>
+    from .optflow import (dequantize_flow, flow_warp, flowread, flowwrite,
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/optflow.py", line 4, in <module>
+    from mmcv._ext import flow_warp_c
+  File "mmcv/video/optflow_warp/flow_warp_module.pyx", line 1, in init mmcv._ext
+ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
+
+(efficientPS_env) yannick@yannick-ubuntu:~/Documents/SS21/crop_aware_PS/EfficientPS$ python tools/train.py efficientPS_singlegpu_sample.py --work_dir work_dirs/checkpoints --validate 
+Traceback (most recent call last):
+  File "tools/train.py", line 8, in <module>
+    import mmcv
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/__init__.py", line 8, in <module>
+    from .video import *
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/__init__.py", line 3, in <module>
+    from .optflow import (dequantize_flow, flow_warp, flowread, flowwrite,
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/video/optflow.py", line 4, in <module>
+    from mmcv._ext import flow_warp_c
+  File "mmcv/video/optflow_warp/flow_warp_module.pyx", line 1, in init mmcv._ext
+ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
+
+mmcv.video and mmcv.visualization commented out
+
+full dataset results in memory error for test, using only subset
+
+
+image per gpu set to 2 resulted in assertion error:
+File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/parallel/collate.py", line 27, in collate
+    assert len(batch) % samples_per_gpu == 0
+AssertionError
+
+set imgs_per_gpu=1,
+    workers_per_gpu=1
+   
+works!
+Category      |    PQ     SQ     RQ
+road          |  95.0   96.1   98.9
+sidewalk      |  69.2   81.9   84.5
+building      |  88.3   90.8   97.2
+wall          |  34.4   81.8   42.1
+fence         |  38.8   72.1   53.8
+pole          |  34.2   67.6   50.5
+traffic light |  40.9   61.4   66.7
+traffic sign  |  66.7   83.3   80.0
+vegetation    |  86.4   89.6   96.5
+terrain       |  45.1   80.8   55.8
+sky           |  70.1   90.1   77.8
+person        |  69.1   79.5   86.9
+rider         |  71.0   71.0  100.0
+car           |  75.3   86.3   87.3
+truck         |  48.6   86.0   56.5
+bus           |  86.0   86.0  100.0
+train         |   0.0    0.0    0.0
+motorcycle    |  45.1   67.6   66.7
+bicycle       |  55.6   71.1   78.3
+-----------------------------------------
+              |    PQ     SQ     RQ     N
+All           |  62.2   80.2   76.6    18
+Things        |  64.4   78.2   82.2     7
+Stuff         |  60.8   81.4   73.1    11
+
+
+try training with subset and works/image to 1
+still directly oom
+changed
+    dict(type='Resize', img_scale=(512, 256), ratio_range=(0.5, 2.0), keep_ratio=True),
+    dict(type='RandomCrop', crop_size=(256, 512)),
+things are happening, but during eval all metrics are 0.0 in the first eval, a bit better in 2nd
+set img_scale=(512, 256), in test test pipeline to match the rest, maybe easier then
+ results in ERROR File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/cityscapesscripts/evaluation/evalPanopticSemanticLabeling.py", line 155, in pq_compute_single_core
+    pan_gt_pred = pan_gt.astype(np.uint64) * OFFSET + pan_pred.astype(np.uint64)
+ValueError: operands could not be broadcast together with shapes (1024,2048) (256,512) 
+
+set back to img_scale=(2048, 1024), this seems to only specify the image size, not a resize
+
+
+TEST:
+show does not work?
+
+(efficientPS_env) yannick@yannick-ubuntu:~/Documents/SS21/crop_aware_PS/EfficientPS$ python tools/test.py configs/efficientPS_singlegpu_sample.py checkpoints/model.pth --eval panoptic --show
+loading annotations into memory...
+Done (t=0.00s)
+creating index...
+index created!
+[                                                  ] 0/59, elapsed: 0s, ETA:/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/core/bbox/transforms.py:98: UserWarning: This overload of addcmul is deprecated:
+	addcmul(Tensor input, Number value, Tensor tensor1, Tensor tensor2, *, Tensor out)
+Consider using one of the following signatures instead:
+	addcmul(Tensor input, Tensor tensor1, Tensor tensor2, *, Number value, Tensor out) (Triggered internally at  /pytorch/torch/csrc/utils/python_arg_parser.cpp:882.)
+  gx = torch.addcmul(px, 1, pw, dx)  # gx = px + pw * dx
+/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/numpy/core/_asarray.py:136: VisibleDeprecationWarning: Creating an ndarray from ragged nested sequences (which is a list-or-tuple of lists-or-tuples-or ndarrays with different lengths or shapes) is deprecated. If you meant to do this, you must specify 'dtype=object' when creating the ndarray
+  return array(a, dtype, copy=False, order=order, subok=True)
+Traceback (most recent call last):
+  File "tools/test.py", line 169, in <module>
+    main()
+  File "tools/test.py", line 147, in main
+    outputs = single_gpu_test(model, data_loader, args.show, args.eval if args.eval[0] == 'panoptic' else None)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/apis/test.py", line 28, in single_gpu_test
+    model.module.show_result(data, result)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/base.py", line 189, in show_result
+    for i, bbox in enumerate(bbox_result)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/base.py", line 189, in <listcomp>
+    for i, bbox in enumerate(bbox_result)
+AttributeError: 'list' object has no attribute 'shape'
+
+
+images are saved in tmpdir anyway, without show, but somehow deleted later
+added     tmpDir = 'tmpDir_test' to panoptic.py as test, but I see no deletion commands anywhere
+
+chnaged tmp name results in error after completion File "tools/test.py", line 169, in <module>
+    main()
+  File "tools/test.py", line 165, in main
+    dataset.evaluate(outputs, args.eval, **kwargs)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/datasets/cityscapes.py", line 234, in evaluate
+    self._evaluate_panoptic(results, outfile_prefix, logger))
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/datasets/cityscapes.py", line 317, in _evaluate_panoptic
+    assert os.path.isdir(pred_folder)
+AssertionError
+
+FOUND it TODO
+in    mmdet datasets cityscape.py     shutil.rmtree('tmpDir') commented out
+
+
+resize also images in test via
+dict(type='Resize', img_scale=(512, 256), ratio_range=(0.5, 2.0), keep_ratio=True),
+instaed of
+dict(type='Resize', keep_ratio=True),
+
+leads to cuda out of memory again during training intern validation
+
+2021-06-16 13:26:03,012 - mmdet - INFO - Epoch [7][221/221]	lr: 0.07000, eta: 2:46:21, time: 0.267, data_time: 0.003, memory: 6053, loss_semantic_seg: 1.1833, loss_rpn_cls: 0.0596, loss_rpn_bbox: 0.0150, loss_cls: 0.2617, acc: 89.8438, loss_bbox: 0.2774, loss_mask: 0.3948, loss: 2.1918
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>      ] 53/59, 1.1 task/s, elapsed: 48s, ETA:     5sTraceback (most recent call last):
+  File "tools/train.py", line 145, in <module>
+    main()
+  File "tools/train.py", line 141, in main
+    meta=meta)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/apis/train.py", line 111, in train_detector
+    meta=meta)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/apis/train.py", line 243, in _non_dist_train
+    runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/runner/runner.py", line 384, in run
+    epoch_runner(data_loaders[i], **kwargs)
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/runner/runner.py", line 293, in train
+    self.call_hook('after_train_epoch')
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/mmcv/runner/runner.py", line 245, in call_hook
+    getattr(hook, fn_name)(self)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/core/evaluation/eval_hooks.py", line 30, in after_train_epoch
+    eval=evalm if evalm[0]=='panoptic' else None)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/apis/test.py", line 21, in single_gpu_test
+    result = model(return_loss=False, rescale=not show, **data)
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/torch/nn/parallel/data_parallel.py", line 159, in forward
+    return self.module(*inputs[0], **kwargs[0])
+  File "/home/yannick/anaconda3/envs/efficientPS_env/lib/python3.7/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/core/fp16/decorators.py", line 49, in new_func
+    return old_func(*args, **kwargs)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/base.py", line 149, in forward
+    return self.forward_test(img, img_metas, eval, **kwargs)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/base.py", line 130, in forward_test
+    return self.simple_test(imgs[0], img_metas[0], eval=eval, **kwargs)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/efficientPS.py", line 255, in simple_test
+    x, img_metas, det_bboxes, det_labels, semantic_logits, rescale=rescale)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/models/efficientps/efficientPS.py", line 395, in simple_test_mask_
+    ref_size, padding="zero")
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/ops/roi_sampling/functions.py", line 89, in roi_sampling
+    return ROISampling.apply(x, bbx, idx, roi_size, interpolation, padding, valid_mask)
+  File "/home/yannick/Documents/SS21/crop_aware_PS/EfficientPS/mmdet/ops/roi_sampling/functions.py", line 27, in forward
+    y, mask = _backend.roi_sampling_forward(x, bbx, idx, roi_size, ctx.interpolation, ctx.padding, valid_mask)
+RuntimeError: CUDA out of memory. Tried to allocate 7.03 GiB (GPU 0; 7.93 GiB total capacity; 1.03 GiB already allocated; 5.53 GiB free; 1.45 GiB reserved in total by PyTorch)
+
+7 GB für ein Bild?!
+
+Loss:
+loss_bbox in efficientPS_singlegpu_sample
+loss_bbox is also in the models bbox_head for example. is called via build_loss which calls build which calls build_from_cfg
+
+what we need to do(?):
+	in mmdet/models/losses different losses are definded and added to the registry
+	so we just do the same?
+	
+	then we can use it in config file such as efficientPS_singlegpu_sample for the bbox loss?
+	
+	losses get pred and target, do these contain also delta and omega such that we can use it for crop aware loss?
+	
+pred and target in the loss are of size ...x 4
+four as in the efficientPS paper below eq 4 b∗= (x,y,w,h)
+we are stil missing how large the currect crop is
+
+where are bounding boxes and therefor the targets cropped? we need this for the cases. Cant find in paper (crop only mentioned twice)
+RandomCrop is in datasets/pipeline/transforms.py, could in theory also return the crop_x1, crop_x2, crop_y1, crop_y2 here simplay asnother entry of results. This would bring it alll the way back to /mmdet/datasets/custom.py function prepare_train_img and therefor __getitem__ of the CustomDataset
+this dataset is used in train in runner which puts the batch into batch_processor which is defined in apis/train.py in which we have **data, so **d means "treat the key-value pairs in the dictionary as additional named arguments to this function call." (data is still a dict of data containes like gt_bboxes, wo our add of x and y would still be there). those are the "scattered in model"
+batch_processor is set by the Runner calss on init, which is done in apis/train.py, batch_processor is a function there
+
+model has a module parameter with is the efficientPS
+
+mmdet/models/efficientps/base.py has the forward which uses img_metas, whose are the same as the ones we could edit in the dataloader
+
+TODO added crop_vals to efficientPS forward_train and in transforms, but didnt work out, maybe because crop_vals was not in results, those are created in prepare_train_img
+TODO adde crop_vals also in custom.py not even needed
+
+values are there after the prepare_train_img
+
+values die in Collect during the compose, perhaps they need to be edited during flip etc
+
+train_pipeline has values which to keep in Collect inside efficientPS_singlegpu_sample, added 'crop_vals'
+do we also need to flip those? Normalize does not matter, is only for color. what about pad?
+
