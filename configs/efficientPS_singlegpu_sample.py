@@ -137,8 +137,8 @@ img_norm_cfg = dict(
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True, with_seg=True),
-    dict(type='Resize', img_scale=(2048, 1024), ratio_range=(0.5, 2.0), keep_ratio=True),
-    dict(type='RandomCrop', crop_size=(1024, 2048)),
+    dict(type='Resize', img_scale=(512, 256), ratio_range=(0.5, 2.0), keep_ratio=True),
+    dict(type='RandomCrop', crop_size=(128, 256)),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
@@ -162,8 +162,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    imgs_per_gpu=2,
-    workers_per_gpu=2,
+    imgs_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/train.json',
