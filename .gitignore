@@ -135,6 +135,15 @@ mmdet/version.py
 *.pkl
 *.pkl.json
 *.log.json
+
+# preventing dataset upload
+/data
+/cityscapes_subset
+/checkpoints
+
+# prevent pycharm uploads
+.idea
+
 *.pth
 tmpDir
 
