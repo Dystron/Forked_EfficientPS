@@ -16,11 +16,15 @@ def smooth_l1_loss(pred, target, beta=1.0):
 
 
 @LOSSES.register_module
-class SmoothL1Loss(nn.Module):
+class cabb(nn.Module):
+    """
+    loss_bbox:
+    cls_score, bbox_pred, *bbox_targets
+    """
 
     def __init__(self, beta=1.0, reduction='mean', loss_weight=1.0):
-        print(f"init smoothl1")
-        super(SmoothL1Loss, self).__init__()
+        print(f'init cabb')
+        super(cabb, self).__init__()
         self.beta = beta
         self.reduction = reduction
         self.loss_weight = loss_weight
@@ -28,11 +32,16 @@ class SmoothL1Loss(nn.Module):
     def forward(self,
                 pred,
                 target,
+                crop_vals,
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
                 **kwargs):
-        assert reduction_override in (None, 'none', 'mean', 'sum')
+        print(crop_vals.shape)
+        x_len = crop_vals[:, 3] - crop_vals[:, 2]
+        y_len = crop_vals[:, 1] - crop_vals[:, 1]
+        print(f'target\n{target}')
+        # assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
         loss_bbox = self.loss_weight * smooth_l1_loss(

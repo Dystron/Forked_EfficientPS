@@ -100,6 +100,7 @@ class BBoxHead(nn.Module):
     def loss(self,
              cls_score,
              bbox_pred,
+             crop_vals,
              labels,
              label_weights,
              bbox_targets,

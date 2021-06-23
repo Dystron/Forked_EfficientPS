@@ -2,6 +2,7 @@ import inspect
 
 import mmcv
 import numpy as np
+import torch
 from numpy import random
 
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
@@ -380,6 +381,7 @@ class RandomCrop(object):
         offset_w = np.random.randint(0, margin_w + 1)
         crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
         crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
+        results["crop_vals"] = torch.Tensor([crop_y1, crop_y2, crop_x1, crop_x2])
 
         # crop the image
         img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
@@ -389,12 +391,16 @@ class RandomCrop(object):
 
         # crop bboxes accordingly and clip to the image boundary
         for key in results.get('bbox_fields', []):
+            # print(f'offset w and h\n{offset_w} {offset_h}')
+            # print(f'crop vals y1 y2 x1 x2\n{[crop_y1, crop_y2, crop_x1, crop_x2]}')
+            # print(f'before crop bbox\n{results[key]}')
             bbox_offset = np.array([offset_w, offset_h, offset_w, offset_h],
                                    dtype=np.float32)
             bboxes = results[key] - bbox_offset
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1] - 1)
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0] - 1)
             results[key] = bboxes
+            # print(f'after crop bbox\n{results[key]}')
 
         # crop semantic seg
         for key in results.get('seg_fields', []):
@@ -409,6 +415,7 @@ class RandomCrop(object):
             if not np.any(valid_inds):
                 return None
             results['gt_bboxes'] = gt_bboxes[valid_inds, :]
+            # print(f'after sort out bbox\n{results["gt_bboxes"]}')
             if 'gt_labels' in results:
                 results['gt_labels'] = results['gt_labels'][valid_inds]
 

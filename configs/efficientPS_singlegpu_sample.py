@@ -44,7 +44,7 @@ model = dict(
         reg_class_agnostic=False,
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+        loss_bbox=dict(type='cabb', beta=1.0, loss_weight=1.0)),
     mask_roi_extractor=dict(
         type='SingleRoIExtractor',
         roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
@@ -143,7 +143,7 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg']),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg', 'crop_vals']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
