@@ -224,3 +224,14 @@ values die in Collect during the compose, perhaps they need to be edited during 
 train_pipeline has values which to keep in Collect inside efficientPS_singlegpu_sample, added 'crop_vals'
 do we also need to flip those? Normalize does not matter, is only for color. what about pad?
 
+
+bbox in implementation is x,y,x,y
+offset w and h
+270 132
+before crop bbox
+[[477.0703  192.21094 691.8672  236.92188]]
+after crop bbox
+[[207.07031   60.210938 255.       104.921875]]
+
+bbox head added crop vals to prevent assertion error in cls_loss (crossentropy)
+loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_vals, *bbox_targets) call loss with crop vals
