@@ -213,7 +213,7 @@ class EfficientPS(BaseDetector):
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
-        self.plot(img, gt_bboxes, bbox_pred)
+        self.plot(img, gt_bboxes, cases)
         loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, cases, *bbox_targets)
 
         losses.update(loss_bbox)
@@ -456,17 +456,26 @@ class EfficientPS(BaseDetector):
 
         return panoptic_mask.cpu(), cat_.cpu()
 
-    def plot(self, img, gt_bbox, bbox_pred):
+    def plot(self, img, gt_bbox, cases):
         # Create figure and axes
         fig, ax = plt.subplots()
         _, c, x, y = img.shape
         img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
         img += 1.5
         ax.imshow(img)
-        for box in gt_bbox[0]:
+        for i, box in enumerate(gt_bbox[0]):
+            case = cases[0][i]
             bbox = box.cpu().numpy()
-            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='r', facecolor='none')
-            ax.add_patch(rect)
+            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1],
+                                     label=case,linewidth=1, edgecolor='r', facecolor='none')
+
+            ax.add_artist(rect)
+            rx, ry = rect.get_xy()
+            cx = rx + rect.get_width() / 2.0
+            cy = ry + rect.get_height() / 2.0
+
+            ax.annotate(case.cpu().numpy(), (cx, cy), color='w', weight='bold',
+                        fontsize=6, ha='center', va='center')
         plt.show()
 
 
