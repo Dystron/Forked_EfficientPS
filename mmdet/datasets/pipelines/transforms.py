@@ -161,7 +161,7 @@ class Resize(object):
                 results[key] = np.stack(masks)
             else:
                 results[key] = np.empty(
-                    (0, ) + results['img_shape'], dtype=np.uint8)
+                    (0,) + results['img_shape'], dtype=np.uint8)
 
     def _resize_seg(self, results):
         for key in results.get('seg_fields', []):
@@ -258,7 +258,7 @@ class RandomFlip(object):
                     results[key] = np.stack(masks)
                 else:
                     results[key] = np.empty(
-                        (0, ) + results['img_shape'], dtype=np.uint8)
+                        (0,) + results['img_shape'], dtype=np.uint8)
 
             # flip segs
             for key in results.get('seg_fields', []):
@@ -313,7 +313,7 @@ class Pad(object):
             if padded_masks:
                 results[key] = np.stack(padded_masks, axis=0)
             else:
-                results[key] = np.empty((0, ) + pad_shape, dtype=np.uint8)
+                results[key] = np.empty((0,) + pad_shape, dtype=np.uint8)
 
     def _pad_seg(self, results):
         for key in results.get('seg_fields', []):
@@ -381,7 +381,8 @@ class RandomCrop(object):
         offset_w = np.random.randint(0, margin_w + 1)
         crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
         crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
-        results["crop_vals"] = torch.Tensor([crop_y1, crop_y2, crop_x1, crop_x2])
+        crop_x_dim = crop_x2 - crop_x1
+        crop_y_dim = crop_y2 - crop_y1
 
         # crop the image
         img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
@@ -391,17 +392,30 @@ class RandomCrop(object):
 
         # crop bboxes accordingly and clip to the image boundary
         for key in results.get('bbox_fields', []):
-            # print(f'offset w and h\n{offset_w} {offset_h}')
-            # print(f'crop vals y1 y2 x1 x2\n{[crop_y1, crop_y2, crop_x1, crop_x2]}')
-            # print(f'before crop bbox\n{results[key]}')
             bbox_offset = np.array([offset_w, offset_h, offset_w, offset_h],
                                    dtype=np.float32)
             bboxes = results[key] - bbox_offset
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1] - 1)
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0] - 1)
             results[key] = bboxes
-            # print(f'after crop bbox\n{results[key]}')
 
+            # other cases do not need to be checked:
+            # e.g. if the upper x or y is now also 0 as that is checked for valid ids and then removed
+            # also if the lower x or y is now crop_dim - 1 as that is also an invalid case
+            lower_x_out = np.where(results[key][:, 0] == 0)
+            lower_y_out = np.where(results[key][:, 1] == 0)
+
+            upper_x_cropped = np.where(results[key][:, 2] == crop_x_dim - 1)
+            upper_y_cropped = np.where(results[key][:, 3] == crop_y_dim - 1)
+            """
+            cases:
+            [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
+            """
+            cases = np.empty_like(results[key])
+            for id in range(cases.shape[0]):
+                cases[id] = [id in lower_x_out[0], id in upper_x_cropped[0], id in lower_y_out[0],
+                             id in upper_y_cropped[0]]
+            results["cases"] = cases
         # crop semantic seg
         for key in results.get('seg_fields', []):
             results[key] = results[key][crop_y1:crop_y2, crop_x1:crop_x2]
@@ -410,12 +424,14 @@ class RandomCrop(object):
         if 'gt_bboxes' in results:
             gt_bboxes = results['gt_bboxes']
             valid_inds = (gt_bboxes[:, 2] > gt_bboxes[:, 0]) & (
-                gt_bboxes[:, 3] > gt_bboxes[:, 1])
+                    gt_bboxes[:, 3] > gt_bboxes[:, 1])
             # if no gt bbox remains after cropping, just skip this image
             if not np.any(valid_inds):
                 return None
             results['gt_bboxes'] = gt_bboxes[valid_inds, :]
-            # print(f'after sort out bbox\n{results["gt_bboxes"]}')
+            # also cut all case information for removed bboxes
+            cases = results["cases"]
+            results["cases"] = cases[valid_inds, :]
             if 'gt_labels' in results:
                 results['gt_labels'] = results['gt_labels'][valid_inds]
 
@@ -424,15 +440,14 @@ class RandomCrop(object):
                 valid_gt_masks = []
                 for i in np.where(valid_inds)[0]:
                     gt_mask = results['gt_masks'][i][crop_y1:crop_y2,
-                                                     crop_x1:crop_x2]
+                              crop_x1:crop_x2]
                     valid_gt_masks.append(gt_mask)
 
                 if valid_gt_masks:
                     results['gt_masks'] = np.stack(valid_gt_masks)
                 else:
                     results['gt_masks'] = np.empty(
-                        (0, ) + results['img_shape'], dtype=np.uint8)
-
+                        (0,) + results['img_shape'], dtype=np.uint8)
         return results
 
     def __repr__(self):
@@ -547,10 +562,10 @@ class PhotoMetricDistortion(object):
         repr_str = self.__class__.__name__
         repr_str += ('(brightness_delta={}, contrast_range={}, '
                      'saturation_range={}, hue_delta={})').format(
-                         self.brightness_delta,
-                         (self.contrast_lower, self.contrast_upper),
-                         (self.saturation_lower, self.saturation_upper),
-                         self.hue_delta)
+            self.brightness_delta,
+            (self.contrast_lower, self.contrast_upper),
+            (self.saturation_lower, self.saturation_upper),
+            self.hue_delta)
         return repr_str
 
 
@@ -614,7 +629,7 @@ class Expand(object):
                 results['gt_masks'] = np.stack(expand_gt_masks)
             else:
                 results['gt_masks'] = np.empty(
-                    (0, ) + results['img_shape'], dtype=np.uint8)
+                    (0,) + results['img_shape'], dtype=np.uint8)
 
         # not tested
         if 'gt_semantic_seg' in results:
@@ -630,8 +645,8 @@ class Expand(object):
         repr_str = self.__class__.__name__
         repr_str += '(mean={}, to_rgb={}, ratio_range={}, ' \
                     'seg_ignore_label={})'.format(
-                        self.mean, self.to_rgb, self.ratio_range,
-                        self.seg_ignore_label)
+            self.mean, self.to_rgb, self.ratio_range,
+            self.seg_ignore_label)
         return repr_str
 
 
@@ -723,7 +738,7 @@ class MinIoURandomCrop(object):
                 # not tested
                 if 'gt_semantic_seg' in results:
                     results['gt_semantic_seg'] = results['gt_semantic_seg'][
-                        patch[1]:patch[3], patch[0]:patch[2]]
+                                                 patch[1]:patch[3], patch[0]:patch[2]]
                 return results
 
     def __repr__(self):

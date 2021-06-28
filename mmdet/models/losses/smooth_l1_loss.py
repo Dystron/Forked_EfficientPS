@@ -19,7 +19,6 @@ def smooth_l1_loss(pred, target, beta=1.0):
 class SmoothL1Loss(nn.Module):
 
     def __init__(self, beta=1.0, reduction='mean', loss_weight=1.0):
-        print(f"init smoothl1")
         super(SmoothL1Loss, self).__init__()
         self.beta = beta
         self.reduction = reduction
