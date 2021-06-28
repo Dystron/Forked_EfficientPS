@@ -3,7 +3,8 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import geffnet
 
 from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
@@ -200,7 +201,7 @@ class EfficientPS(BaseDetector):
         proposal_inputs = rpn_outs + (img_metas, proposal_cfg)
         proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
 
-        sampling_results =  self.assign_result(x, proposal_list, img,
+        sampling_results = self.assign_result(x, proposal_list, img,
                                gt_bboxes, gt_labels, gt_bboxes_ignore)
        
         rois = bbox2roi([res.bboxes for res in sampling_results])
@@ -213,6 +214,9 @@ class EfficientPS(BaseDetector):
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
+
+        #TODO: Add predicted bounding box
+        self.plot(img, gt_bboxes, bbox_pred)
         # print(f'calling our loss')
         loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_vals, *bbox_targets)
         # if self.bbox_head.loss.get["type"] == "cabb":
@@ -462,3 +466,18 @@ class EfficientPS(BaseDetector):
         panoptic_mask[bool_mask] = new_sem_pred[bool_mask] + total_unique 
 
         return panoptic_mask.cpu(), cat_.cpu()
+
+    def plot(self, img, gt_bbox, bbox_pred):
+        # Create figure and axes
+        fig, ax = plt.subplots()
+        _, c, x, y = img.shape
+        img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
+        img += 1.5
+        ax.imshow(img)
+        for box in gt_bbox[0]:
+            bbox = box.cpu().numpy()
+            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)
+        plt.show()
+
+
