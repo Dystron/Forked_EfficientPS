@@ -23,7 +23,6 @@ class cabb(nn.Module):
     """
 
     def __init__(self, beta=1.0, reduction='mean', loss_weight=1.0):
-        print(f'init cabb')
         super(cabb, self).__init__()
         self.beta = beta
         self.reduction = reduction
@@ -32,15 +31,16 @@ class cabb(nn.Module):
     def forward(self,
                 pred,
                 target,
-                crop_vals,
+                cases,
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
                 **kwargs):
-        print(crop_vals.shape)
-        x_len = crop_vals[:, 3] - crop_vals[:, 2]
-        y_len = crop_vals[:, 1] - crop_vals[:, 1]
-        print(f'target\n{target}')
+        # TODO debug: test if the crop values or cases are as long as the number of images
+        #  (otherwise check valid ids in transforms)
+        # print(f'target\n{target}')
+        print(f'cases in loss\n'
+              f'{cases}')
         # assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)

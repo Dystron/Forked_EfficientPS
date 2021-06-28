@@ -175,12 +175,11 @@ class EfficientPS(BaseDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      crop_vals,
+                      cases,
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       gt_semantic_seg=None):
 
-        # print(crop_vals)
         x = self.extract_feat(img)
         losses = dict()
 
@@ -213,16 +212,7 @@ class EfficientPS(BaseDetector):
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
-        # print(f'calling our loss')
-        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_vals, *bbox_targets)
-        # if self.bbox_head.loss.get["type"] == "cabb":
-        #     print("type matched")
-        #     loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_vals,
-        #                                     *bbox_targets)
-        # else:
-        #     print("no matching type")
-        #     loss_bbox = self.bbox_head.loss(cls_score, bbox_pred,
-        #                                     *bbox_targets)
+        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, cases, *bbox_targets)
         losses.update(loss_bbox)
 
 

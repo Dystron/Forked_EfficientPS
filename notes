@@ -235,3 +235,15 @@ after crop bbox
 
 bbox head added crop vals to prevent assertion error in cls_loss (crossentropy)
 loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_vals, *bbox_targets) call loss with crop vals
+
+28.06.2021
+
+Swap flip and crop in pipeline to preserve cases after crop
+
+if the before - after > dim_crop: then after crop = crop_upper - 1 aka gt box too long for crop
+if the before - after < dim_crop: then after crop = 0 aka gt box too for left/top for crop
+
+cases:
+            [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
+in bboxhead made an extra call to bbox loss if cases is not NOne where cases are given
+
