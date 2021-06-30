@@ -46,6 +46,7 @@ class BBoxHead(nn.Module):
         self.fp16_enabled = False
 
         self.loss_cls = build_loss(loss_cls)
+        print(f'Using bbox loss:{loss_bbox}')
         self.loss_bbox = build_loss(loss_bbox)
 
         in_channels = self.in_channels
@@ -128,6 +129,10 @@ class BBoxHead(nn.Module):
                         bbox_pred.size(0), -1,
                         4)[pos_inds.type(torch.bool),
                            labels[pos_inds.type(torch.bool)]]
+                print(f'Number of positive BBox predictions: {pos_bbox_pred.shape[0]}')
+                print(f'Number of cases (should be same as # gt boxes): {cases.shape[1]}')
+                print(f'Number of targets: {bbox_targets.shape[0]}')
+                #print(f'Positive BBox predictions: \n {pos_bbox_pred}')
                 if cases is not None:
                     losses['loss_bbox'] = self.loss_bbox(
                         pos_bbox_pred,

@@ -13,7 +13,7 @@ INF = 1e8
 
 @HEADS.register_module
 class FCOSHead(nn.Module):
-    """
+    """        print(sampling_results[0].pos_bboxes)
     Fully Convolutional One-Stage Object Detection head from [1]_.
 
     The FCOS head does not use anchor boxes. Instead bounding boxes are

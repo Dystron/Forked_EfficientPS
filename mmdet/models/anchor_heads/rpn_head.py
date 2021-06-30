@@ -16,6 +16,8 @@ class RPNHead(AnchorHead):
         super(RPNHead, self).__init__(2, in_channels, **kwargs)
 
     def _init_layers(self):
+        print('Number Anchors: {}'.format(str(self.num_anchors)))
+        print('Number Cls out channels: {}'.format(str(self.cls_out_channels)))
         self.rpn_conv = nn.Conv2d(
             self.in_channels, self.feat_channels, 3, padding=1)
         self.rpn_cls = nn.Conv2d(self.feat_channels,
@@ -28,6 +30,7 @@ class RPNHead(AnchorHead):
         normal_init(self.rpn_reg, std=0.01)
 
     def forward_single(self, x):
+        print(x.shape)
         x = self.rpn_conv(x)
         x = F.relu(x, inplace=True)
         rpn_cls_score = self.rpn_cls(x)

@@ -8,7 +8,7 @@ import matplotlib.patches as patches
 import geffnet
 
 from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
-                        build_sampler, multiclass_nms)
+                        build_sampler, multiclass_nms, delta2bbox)
 from .. import builder
 from ..registry import EFFICIENTPS
 from .base import BaseDetector
@@ -168,7 +168,6 @@ class EfficientPS(BaseDetector):
                     gt_labels[i],
                     feats=[lvl_feat[i][None] for lvl_feat in x])
             sampling_results.append(sampling_result)
-
         return sampling_results
 
     def forward_train(self,
@@ -189,6 +188,10 @@ class EfficientPS(BaseDetector):
         losses.update(loss_seg)
 
         rpn_outs = self.rpn_head(x)
+        print('RPN outputs:')
+        for i in range(len(rpn_outs[0])):
+            print(rpn_outs[0][i].shape)
+            print(rpn_outs[1][i].shape)
         rpn_loss_inputs = rpn_outs + (gt_bboxes, img_metas,
                                           self.train_cfg.rpn)
         rpn_losses = self.rpn_head.loss(
@@ -208,13 +211,31 @@ class EfficientPS(BaseDetector):
                 x[:self.bbox_roi_extractor.num_inputs], rois)
         if self.with_shared_head:
             bbox_feats = self.shared_head(bbox_feats)
+
+
         cls_score, bbox_pred = self.bbox_head(bbox_feats)
 
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
-        self.plot(img, gt_bboxes, cases)
+        print(f'Bbox prediction shape: \n'
+              f'{bbox_pred.shape}')
+        print(f'Bbox prediction shape: \n'
+              f'{bbox_pred.shape}')
+        print(f'Number of gt boxes: {gt_bboxes[0].shape[0]}')
+        print(f'Number of positive anchors: {sampling_results[0].pos_bboxes.shape[0]}')
         loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, cases, *bbox_targets)
+
+        # self.plot_anchors(img, [sampling_results[0].neg_bboxes], 'r')
+        # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'g')
+        # self.plot_anchors(img, [bbox_pred.detach()], 'b')
+        # self.plot(img, gt_bboxes, cases)
+        img_shape = img_metas[0]['img_shape']
+        bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.bbox_head.target_means,
+                            self.bbox_head.target_stds, img_shape)
+
+        self.plot_anchors(img, [bboxes.detach()], 'b')
+        self.plot_anchors_and_gt(img, gt_bboxes, [sampling_results[0].pos_bboxes], cases)
 
         losses.update(loss_bbox)
 
@@ -478,4 +499,55 @@ class EfficientPS(BaseDetector):
                         fontsize=6, ha='center', va='center')
         plt.show()
 
+    def plot_anchors(self, img, anchor, color='r'):
+        # Create figure and axes
+        fig, ax = plt.subplots()
+        _, c, x, y = img.shape
+        img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
+        img += 1.5
+        ax.imshow(img)
+        for i, box in enumerate(anchor[0]):
+            bbox = box.cpu().numpy()
+            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1],linewidth=1, edgecolor=color
+                                     , facecolor='none')
 
+            ax.add_artist(rect)
+            rx, ry = rect.get_xy()
+            cx = rx + rect.get_width() / 2.0
+            cy = ry + rect.get_height() / 2.0
+
+            #ax.annotate(case.cpu().numpy(), (cx, cy), color='w', weight='bold',
+            #            fontsize=6, ha='center', va='center')
+        plt.show()
+
+    def plot_anchors_and_gt(self, img, gt, anchor, cases):
+        # Create figure and axes
+        fig, ax = plt.subplots()
+        _, c, x, y = img.shape
+        img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
+        img += 1.5
+        ax.imshow(img)
+        for i, box in enumerate(anchor[0]):
+            bbox = box.cpu().numpy()
+            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1],linewidth=1, edgecolor='r'
+                                     , facecolor='none')
+
+            ax.add_artist(rect)
+            rx, ry = rect.get_xy()
+            cx = rx + rect.get_width() / 2.0
+            cy = ry + rect.get_height() / 2.0
+
+        for i, box in enumerate(gt[0]):
+            case = cases[0][i]
+            bbox = box.cpu().numpy()
+            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1],linewidth=1, edgecolor='b'
+                                     , facecolor='none')
+
+            ax.add_artist(rect)
+            rx, ry = rect.get_xy()
+            cx = rx + rect.get_width() / 2.0
+            cy = ry + rect.get_height() / 2.0
+
+            ax.annotate(case.cpu().numpy(), (cx, cy), color='w', weight='bold',
+                        fontsize=6, ha='center', va='center')
+        plt.show()
