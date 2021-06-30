@@ -230,12 +230,15 @@ class EfficientPS(BaseDetector):
         # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'g')
         # self.plot_anchors(img, [bbox_pred.detach()], 'b')
         # self.plot(img, gt_bboxes, cases)
+
+        # get all predictions into correct form
         img_shape = img_metas[0]['img_shape']
         bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.bbox_head.target_means,
                             self.bbox_head.target_stds, img_shape)
 
-        self.plot_anchors(img, [bboxes.detach()], 'b')
-        self.plot_anchors_and_gt(img, gt_bboxes, [sampling_results[0].pos_bboxes], cases)
+        # plot positive predictions, positive anchors and ground truth boxes
+        self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'b')
+        self.plot_anchors_and_gt(img, gt_bboxes, [bboxes.detach()[:sampling_results[0].pos_bboxes.shape[0]]], cases)
 
         losses.update(loss_bbox)
 

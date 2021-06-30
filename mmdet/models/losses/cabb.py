@@ -44,7 +44,8 @@ class cabb(nn.Module):
         # assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        print('Target bboxes size: {}'.format(str(target.size())))
+        print(f'Prediction size: {pred.size()}')
+        print('Target size: {}'.format(str(target.size())))
         loss_bbox = self.loss_weight * smooth_l1_loss(
             pred,
             target,
