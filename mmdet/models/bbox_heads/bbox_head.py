@@ -101,6 +101,9 @@ class BBoxHead(nn.Module):
     def loss(self,
              cls_score,
              bbox_pred,
+             img_shapes,
+             proposal_list,
+             sampling_results,
              cases,
              labels,
              label_weights,
@@ -133,10 +136,13 @@ class BBoxHead(nn.Module):
                 print(f'Number of cases (should be same as # gt boxes): {cases.shape[1]}')
                 print(f'Number of targets: {bbox_targets.shape[0]}')
                 #print(f'Positive BBox predictions: \n {pos_bbox_pred}')
-                if cases is not None:
+                if cases is not None and img_shapes is not None:
                     losses['loss_bbox'] = self.loss_bbox(
                         pos_bbox_pred,
                         bbox_targets[pos_inds.type(torch.bool)],
+                        img_shapes,
+                        proposal_list,
+                        sampling_results,
                         cases,
                         bbox_weights[pos_inds.type(torch.bool)],
                         avg_factor=bbox_targets.size(0),

@@ -202,6 +202,7 @@ class EfficientPS(BaseDetector):
                                               self.test_cfg.rpn)
         proposal_inputs = rpn_outs + (img_metas, proposal_cfg)
         proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
+        print(f'proposal list after rpn head shape\n{proposal_list[0].shape}')
 
         sampling_results = self.assign_result(x, proposal_list, img,
                                gt_bboxes, gt_labels, gt_bboxes_ignore)
@@ -218,13 +219,16 @@ class EfficientPS(BaseDetector):
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
-        print(f'Bbox prediction shape: \n'
-              f'{bbox_pred.shape}')
-        print(f'Bbox prediction shape: \n'
-              f'{bbox_pred.shape}')
-        print(f'Number of gt boxes: {gt_bboxes[0].shape[0]}')
-        print(f'Number of positive anchors: {sampling_results[0].pos_bboxes.shape[0]}')
-        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, cases, *bbox_targets)
+        # print(f'bbox targets\n{bbox_targets}')
+        # print(f'Bbox prediction shape: \n'
+        #       f'{bbox_pred.shape}')
+        # print(f'Bbox prediction shape: \n'
+        #       f'{bbox_pred.shape}')
+        # print(f'Number of gt boxes: {gt_bboxes[0].shape[0]}')
+        # print(f'Number of positive anchors: {sampling_results[0].pos_bboxes.shape[0]}')
+
+        img_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
+        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, img_shapes, proposal_list, sampling_results, cases, *bbox_targets)
 
         # self.plot_anchors(img, [sampling_results[0].neg_bboxes], 'r')
         # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'g')

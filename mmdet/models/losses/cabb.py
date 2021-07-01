@@ -31,6 +31,9 @@ class cabb(nn.Module):
     def forward(self,
                 pred,
                 target,
+                img_shapes,
+                proposal_list,
+                sampling_results,
                 cases,
                 weight=None,
                 avg_factor=None,
@@ -39,6 +42,13 @@ class cabb(nn.Module):
         # TODO debug: test if the crop values or cases are as long as the number of images
         #  (otherwise check valid ids in transforms)
         # print(f'target\n{target}')
+        print(f'img shape\n{img_shapes}')
+        print(f'proposal_list\n{proposal_list}')
+        print(f'sampling_results\n{sampling_results}')
+        print(f'len of proposal list and sampling results pos_inds \n{proposal_list[0].shape} {sampling_results[0].pos_inds.shape}')
+        # are those our anchors and pixel coordinates?
+        positive_proposals = proposal_list[0][sampling_results[0].pos_inds, :]
+        print(f'positive proposals\n{positive_proposals}')
         print(f'cases in loss\n'
               f'{cases}')
         # assert reduction_override in (None, 'none', 'mean', 'sum')
@@ -46,6 +56,7 @@ class cabb(nn.Module):
             reduction_override if reduction_override else self.reduction)
         print(f'Prediction size: {pred.size()}')
         print('Target size: {}'.format(str(target.size())))
+
         loss_bbox = self.loss_weight * smooth_l1_loss(
             pred,
             target,
