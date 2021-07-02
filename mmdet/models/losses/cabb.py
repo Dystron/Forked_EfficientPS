@@ -1,18 +1,46 @@
 import torch
 import torch.nn as nn
-
+import numpy as np
 from ..registry import LOSSES
 from .utils import weighted_loss
 
 
-@weighted_loss
-def smooth_l1_loss(pred, target, beta=1.0):
+def epsilon(omega, omega_p, delta_p, a1):
+    omega_hat = 2 * (delta_p - a1)
+    x = (omega - omega_hat) / 2
+    return bbox_loss(x, omega, omega_p)
+
+
+def epsilon_prime(omega, omega_p, delta_p, a1):
+    omega_hat = 2 * (delta_p - a1)
+    x = (omega - omega_hat) / 2
+    diff = np.log(omega) - np.log(omega_p)
+    return 0.5 * smooth_l1_loss_prime(, beta) + smooth_l1_loss_prime(diff, beta) / omega
+
+
+
+def sigma():
+    pass
+
+def phi():
+    pass
+
+
+def bbox_loss(x, omega, omega_p, beta=1.0):
+    diff = np.log(omega) - np.log(omega_p)
+    return smooth_l1_loss(x, beta) + smooth_l1_loss(diff, beta)
+
+
+def smooth_l1_loss(x, beta=1.0):
     assert beta > 0
-    assert pred.size() == target.size() and target.numel() > 0
-    diff = torch.abs(pred - target)
+    diff = torch.abs(x)
     loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
                        diff - 0.5 * beta)
     return loss
+
+
+def smooth_l1_loss_prime(x, beta):
+    return np.clip(x / beta, a_min=-1, a_max=1)
 
 
 @LOSSES.register_module
@@ -52,6 +80,7 @@ class cabb(nn.Module):
         print(f'cases in loss\n'
               f'{cases}')
         # assert reduction_override in (None, 'none', 'mean', 'sum')
+        # what is this ?y
         reduction = (
             reduction_override if reduction_override else self.reduction)
         print(f'Prediction size: {pred.size()}')
