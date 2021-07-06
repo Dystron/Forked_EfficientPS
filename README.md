@@ -87,7 +87,7 @@ python createPanopticImgs.py --dataset-folder path_to_cityscapes_gtFine_folder -
 Edit the config file appropriately in configs folder.
 Train with a single GPU:
 ```
-python tools/train.py efficientPS_singlegpu_sample.py --work_dir work_dirs/checkpoints --validate 
+python tools/train.py configs/efficientPS_singlegpu_sample.py --work_dir work_dirs/checkpoints --validate 
 ```
 Train with multiple GPUS:
 ```

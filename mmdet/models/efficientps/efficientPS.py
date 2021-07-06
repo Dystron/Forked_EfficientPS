@@ -188,10 +188,6 @@ class EfficientPS(BaseDetector):
         losses.update(loss_seg)
 
         rpn_outs = self.rpn_head(x)
-        print('RPN outputs:')
-        for i in range(len(rpn_outs[0])):
-            print(rpn_outs[0][i].shape)
-            print(rpn_outs[1][i].shape)
         rpn_loss_inputs = rpn_outs + (gt_bboxes, img_metas,
                                           self.train_cfg.rpn)
         rpn_losses = self.rpn_head.loss(
@@ -216,6 +212,9 @@ class EfficientPS(BaseDetector):
 
         cls_score, bbox_pred = self.bbox_head(bbox_feats)
 
+        cases = self.bbox_head.get_cases(cases, sampling_results)
+        proposal_list = self.bbox_head.get_associated_anchors(sampling_results)
+
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
@@ -227,8 +226,9 @@ class EfficientPS(BaseDetector):
         # print(f'Number of gt boxes: {gt_bboxes[0].shape[0]}')
         # print(f'Number of positive anchors: {sampling_results[0].pos_bboxes.shape[0]}')
 
-        img_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
-        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, img_shapes, proposal_list, sampling_results, cases, *bbox_targets)
+        crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
+        crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
+        loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, cases, *bbox_targets)
 
         # self.plot_anchors(img, [sampling_results[0].neg_bboxes], 'r')
         # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'g')

@@ -110,7 +110,7 @@ def SOLVE_O2(delta_p, omega_p, a2, b2, beta=1.0):
     # TODO verify what exactly omega_hat should be in the next two calls
     # maybe compute a1 as on page 5 and get the omega_hat that way? (using delta_gt)
     if epsilon(omega=omega_1, omega_p=omega_p, omega_hat=omega_hat1, beta=beta) <= \
-            epsilon(omega=omega_2, omega_p=omega_p, omega_hat=omega_hat1, beta=beta):
+            epsilon(omega=omega_2, omega_p=omega_p, omega_hat=omega_hat2, beta=beta):
         return (a2 + (omega_1 / 2), omega_1)
     else:
         return (b2 + (omega_2 / 2), omega_2)
@@ -132,7 +132,7 @@ class cabb(nn.Module):
     def forward(self,
                 pred,
                 target,
-                img_shapes,
+                crop_shapes,
                 proposal_list,
                 sampling_results,
                 cases,
@@ -143,24 +143,87 @@ class cabb(nn.Module):
         # TODO debug: test if the crop values or cases are as long as the number of images
         #  (otherwise check valid ids in transforms)
         # print(f'target\n{target}')
-        print(f'img shape\n{img_shapes}')
-        print(f'proposal_list\n{proposal_list}')
+        print(f'img shape\n{crop_shapes}')
+        print(f'proposal_list\n{proposal_list.shape}')
         print(f'sampling_results\n{sampling_results}')
-        print(
-            f'len of proposal list and sampling results pos_inds \n{proposal_list[0].shape} {sampling_results[0].pos_inds.shape}')
-        # are those our anchors and pixel coordinates?
-        positive_proposals = proposal_list[0][sampling_results[0].pos_inds, :]
-        print(f'positive proposals\n{positive_proposals}')
         print(f'cases in loss\n'
-              f'{cases}')
+              f'{cases.shape}')
         # assert reduction_override in (None, 'none', 'mean', 'sum')
-        # what is this ?y
         reduction = (
             reduction_override if reduction_override else self.reduction)
         print(f'Prediction size: {pred.size()}')
         print('Target size: {}'.format(str(target.size())))
 
-        loss_bbox = self.loss_weight * smooth_l1_loss(
+        """
+        cases:
+        [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
+        delta notation:
+        dx, dy, dw, dh
+        """
+        # TODO: why are some ground truths = [0, 0, 0, 0] ?
+        label = [None, None, None, None]
+        for i in range(pred.shape[0]):
+            print(f'Bbox prediction: {pred.cpu()[i]}')
+            print(f'Associated Proposal: {proposal_list[i]}')
+            print(f'Case for this prediction: {cases.cpu()[i]}')
+            print(f'GT for this prediction: {target.cpu()[i]}')
+            print(f'Crop dimensions: {crop_shapes[i]}')
+            # set the x dimension parameters of the target label
+            if not cases[0] and not cases[1]:
+                # x dimension has not been cut
+                label[0] = target[i][0]
+                label[2] = target[i][2]
+            elif cases[0] and not cases[1]:
+                # x cut left --> O1 first case
+                # todo: check if this is not second case
+                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
+                da = proposal_list[i][2] - proposal_list[i][0]
+                a1 = target[i][0] - 0.5 * target[i][2]
+                b1 = (crop_shapes[i][0] - ca) / da
+                omega_hat = 2 * (pred[i][0] - a1)
+                omega_star = SOLVE_O1(omega_p=pred[i][2], omega_hat=omega_hat, a1=a1, b1=b1)
+                delta_star = a1 + 0.5 * omega_star
+                label[0] = delta_star
+                label[2] = omega_star
+            elif not cases[0] and cases[1]:
+                # x cut right --> O1 second case
+                # todo: check if this is not first case
+                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
+                da = proposal_list[i][2] - proposal_list[i][0]
+                a1 = - ca / da
+                b1 = target[i][0] + 0.5 * target[i][2]
+                omega_hat = 2 * (b1 - pred[i][0])
+                omega_star = SOLVE_O1(omega_p=pred[i][2], omega_hat=omega_hat, a1=a1, b1=b1)
+                delta_star = b1 - 0.5 * omega_star
+                label[0] = delta_star
+                label[2] = omega_star
+            else:
+                # x cut on both sides --> O2
+                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
+                da = proposal_list[i][2] - proposal_list[i][0]
+                a2 = - ca / da
+                b2 = (crop_shapes[i][0] - ca) / da
+                label[0], label[2] = SOLVE_O2(delta_p=pred[i][0], omega_p=pred[i][0], a2=a2, b2=b2)
+
+            # set the y dimension parameters of the target label
+            if not cases[2] and not cases[3]:
+                # x dimension has not been cut
+                label[1] = target[i][1]
+                label[3] = target[i][3]
+            elif cases[2] and not cases[3]:
+                # x cut left
+                pass
+            elif not cases[2] and cases[3]:
+                # x cut right
+                pass
+            else:
+                # x cut on both sides
+                pass
+
+            # MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
+
+
+        """loss_bbox = self.loss_weight * smooth_l1_loss(
             pred,
             target,
             weight,
@@ -168,4 +231,5 @@ class cabb(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
-        return loss_bbox
+        return loss_bbox"""
+        return 1

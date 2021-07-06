@@ -97,11 +97,48 @@ class BBoxHead(nn.Module):
             target_stds=self.target_stds)
         return cls_reg_targets
 
+    def get_crop_dimensions(self, crop_shapes, sampling_results):
+        """
+        Return a 2-d tensor of crop dimensions (#values = #predictions_per_image * #images_in_batch) in x, y format
+        image_shapes: list of image shape for each image in batch
+        sampling_results: information on how the proposals have been sampled.
+        """
+        dimensions = torch.tensor([])
+        for i, res in enumerate(sampling_results):
+            crop_dim_for_each_pred = [[crop_shapes[i][1], crop_shapes[i][0]] for j in range(res.pos_bboxes.shape[0])]
+            dimensions = torch.cat((dimensions, torch.tensor(crop_dim_for_each_pred)))
+        return dimensions
+
+
+    def get_cases(self, cases, sampling_results):
+        """
+        Returns cases of all images and predictions as single 2-D torch tensor.
+        cases: 3-d troch tensor of cases, first dim is #images
+        sampling_results: information on how the proposals have been sampled.
+        """
+        cases = cases.cpu()
+        cat_cases = torch.tensor([])
+        for i, res in enumerate(sampling_results):
+            image_cases = cases[i][res.pos_assigned_gt_inds.cpu().numpy(), :]
+            cat_cases = torch.cat((cat_cases, image_cases))
+        return cat_cases
+
+    def get_associated_anchors(self, sampling_results):
+        """
+        Returns the anchors which are associated with the predictions as single 2-D torch tensor.
+        sampling_results: information on how the proposals have been sampled, includes the anchors.
+        """
+        cat_anchors = torch.tensor([])
+        for i, res in enumerate(sampling_results):
+            cat_anchors = torch.cat((cat_anchors, res.pos_bboxes.cpu()))
+        return cat_anchors
+
+
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
              cls_score,
              bbox_pred,
-             img_shapes,
+             crop_shapes,
              proposal_list,
              sampling_results,
              cases,
@@ -136,11 +173,11 @@ class BBoxHead(nn.Module):
                 print(f'Number of cases (should be same as # gt boxes): {cases.shape[1]}')
                 print(f'Number of targets: {bbox_targets.shape[0]}')
                 #print(f'Positive BBox predictions: \n {pos_bbox_pred}')
-                if cases is not None and img_shapes is not None:
+                if cases is not None and crop_shapes is not None:
                     losses['loss_bbox'] = self.loss_bbox(
                         pos_bbox_pred,
                         bbox_targets[pos_inds.type(torch.bool)],
-                        img_shapes,
+                        crop_shapes,
                         proposal_list,
                         sampling_results,
                         cases,
