@@ -545,7 +545,7 @@ class EfficientPS(BaseDetector):
             cy = ry + rect.get_height() / 2.0
 
         for i, box in enumerate(gt[0]):
-            case = cases[0][i]
+            case = cases[i]
             bbox = box.cpu().numpy()
             rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1],linewidth=1, edgecolor='b'
                                      , facecolor='none')
