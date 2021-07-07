@@ -136,6 +136,7 @@ class BBoxHead(nn.Module):
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
+             img,
              cls_score,
              bbox_pred,
              crop_shapes,
@@ -175,6 +176,7 @@ class BBoxHead(nn.Module):
                 #print(f'Positive BBox predictions: \n {pos_bbox_pred}')
                 if cases is not None and crop_shapes is not None:
                     losses['loss_bbox'] = self.loss_bbox(
+                        img,
                         pos_bbox_pred,
                         bbox_targets[pos_inds.type(torch.bool)],
                         crop_shapes,

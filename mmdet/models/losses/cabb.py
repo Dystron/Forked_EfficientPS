@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 from ..registry import LOSSES
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from .utils import weighted_loss
 
 
@@ -116,6 +118,61 @@ def SOLVE_O2(delta_p, omega_p, a2, b2, beta=1.0):
         return (b2 + (omega_2 / 2), omega_2)
 
 
+def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0):
+
+
+    # if axis = 0 optimize x coordinate else y
+    if axis == 0:
+        left_or_top, right_or_bottom = 0, 1
+        delta_id, omega_id = 0, 2
+    elif axis == 1:
+        left_or_top, right_or_bottom = 2, 3
+        delta_id, omega_id = 1, 3
+    else:
+        raise Exception('No proper axis selected, no axis with value: {}'.format(str(axis)))
+
+    label = [None, None, None, None]
+    # set the x dimension parameters of the target label
+    if not cases[i][left_or_top] and not cases[i][right_or_bottom]:
+        print('DEFAULT CASE!')
+        # x dimension has not been cut
+        delta_label = target[i][delta_id]
+        omega_label = target[i][omega_id]
+    elif cases[i][left_or_top] and not cases[i][right_or_bottom]:
+        print('LEFT OR TOP CUT')
+        # x cut left --> O1 first case
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        a1 = target[i][delta_id] - 0.5 * target[i][omega_id]
+        b1 = (crop_shapes[i][axis] - ca) / da
+        omega_hat = 2 * (pred[i][delta_id] - a1)
+        omega_star = SOLVE_O1(omega_p=pred[i][omega_id], omega_hat=omega_hat, a1=a1, b1=b1)
+        delta_star = a1 + 0.5 * omega_star
+        delta_label = delta_star
+        omega_label = omega_star
+    elif not cases[i][left_or_top] and cases[i][right_or_bottom]:
+        print('RIGHT OR BOTTOM CUT')
+        # x cut right --> O1 second case
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        a1 = - ca / da
+        b1 = target[i][delta_id] + 0.5 * target[i][omega_id]
+        omega_hat = 2 * (b1 - pred[i][delta_id])
+        omega_star = SOLVE_O1(omega_p=pred[i][omega_id], omega_hat=omega_hat, a1=a1, b1=b1)
+        delta_star = b1 - 0.5 * omega_star
+        delta_label = delta_star
+        omega_label = omega_star
+    else:
+        print('BOTH')
+        # x cut on both sides --> O2
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        a2 = - ca / da
+        b2 = (crop_shapes[i][delta_id] - ca) / da
+        delta_label, omega_label = SOLVE_O2(delta_p=pred[i][delta_id], omega_p=pred[i][delta_id], a2=a2, b2=b2)
+    return delta_label, omega_label
+
+
 @LOSSES.register_module
 class cabb(nn.Module):
     """
@@ -130,6 +187,7 @@ class cabb(nn.Module):
         self.loss_weight = loss_weight
 
     def forward(self,
+                img,
                 pred,
                 target,
                 crop_shapes,
@@ -142,18 +200,9 @@ class cabb(nn.Module):
                 **kwargs):
         # TODO debug: test if the crop values or cases are as long as the number of images
         #  (otherwise check valid ids in transforms)
-        # print(f'target\n{target}')
-        print(f'img shape\n{crop_shapes}')
-        print(f'proposal_list\n{proposal_list.shape}')
-        print(f'sampling_results\n{sampling_results}')
-        print(f'cases in loss\n'
-              f'{cases.shape}')
         # assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
-        print(f'Prediction size: {pred.size()}')
-        print('Target size: {}'.format(str(target.size())))
-
         """
         cases:
         [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
@@ -161,64 +210,27 @@ class cabb(nn.Module):
         dx, dy, dw, dh
         """
         # TODO: why are some ground truths = [0, 0, 0, 0] ?
-        label = [None, None, None, None]
+        pred = pred.cpu().detach()
+        target = target.cpu().detach()
+        crop_shapes = crop_shapes.cpu().detach()
+        proposal_list = proposal_list.cpu().detach()
+        cases = cases.cpu().detach()
+
         for i in range(pred.shape[0]):
             print(f'Bbox prediction: {pred.cpu()[i]}')
             print(f'Associated Proposal: {proposal_list[i]}')
             print(f'Case for this prediction: {cases.cpu()[i]}')
             print(f'GT for this prediction: {target.cpu()[i]}')
             print(f'Crop dimensions: {crop_shapes[i]}')
-            # set the x dimension parameters of the target label
-            if not cases[0] and not cases[1]:
-                # x dimension has not been cut
-                label[0] = target[i][0]
-                label[2] = target[i][2]
-            elif cases[0] and not cases[1]:
-                # x cut left --> O1 first case
-                # todo: check if this is not second case
-                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
-                da = proposal_list[i][2] - proposal_list[i][0]
-                a1 = target[i][0] - 0.5 * target[i][2]
-                b1 = (crop_shapes[i][0] - ca) / da
-                omega_hat = 2 * (pred[i][0] - a1)
-                omega_star = SOLVE_O1(omega_p=pred[i][2], omega_hat=omega_hat, a1=a1, b1=b1)
-                delta_star = a1 + 0.5 * omega_star
-                label[0] = delta_star
-                label[2] = omega_star
-            elif not cases[0] and cases[1]:
-                # x cut right --> O1 second case
-                # todo: check if this is not first case
-                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
-                da = proposal_list[i][2] - proposal_list[i][0]
-                a1 = - ca / da
-                b1 = target[i][0] + 0.5 * target[i][2]
-                omega_hat = 2 * (b1 - pred[i][0])
-                omega_star = SOLVE_O1(omega_p=pred[i][2], omega_hat=omega_hat, a1=a1, b1=b1)
-                delta_star = b1 - 0.5 * omega_star
-                label[0] = delta_star
-                label[2] = omega_star
-            else:
-                # x cut on both sides --> O2
-                ca = 0.5 * (proposal_list[i][0] + proposal_list[i][2])
-                da = proposal_list[i][2] - proposal_list[i][0]
-                a2 = - ca / da
-                b2 = (crop_shapes[i][0] - ca) / da
-                label[0], label[2] = SOLVE_O2(delta_p=pred[i][0], omega_p=pred[i][0], a2=a2, b2=b2)
-
-            # set the y dimension parameters of the target label
-            if not cases[2] and not cases[3]:
-                # x dimension has not been cut
-                label[1] = target[i][1]
-                label[3] = target[i][3]
-            elif cases[2] and not cases[3]:
-                # x cut left
-                pass
-            elif not cases[2] and cases[3]:
-                # x cut right
-                pass
-            else:
-                # x cut on both sides
-                pass
+            label = [None, None, None, None]
+            target[i][[2,3]] = np.exp(target[i][[2,3]])
+            pred[i][[2, 3]] = np.exp(pred[i][[2, 3]])
+            # optimize in x
+            label[0], label[2] = case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
+            # optimize in y
+            label[1], label[3] = case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=1)
+            print(f'New Target: {torch.tensor(label)}')
+            self.plot_anchors_and_gt(img, target[i], proposal_list[i], label, pred[i])
 
             # MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
 
@@ -233,3 +245,58 @@ class cabb(nn.Module):
             **kwargs)
         return loss_bbox"""
         return 1
+
+    def transform_bbox_with_deltas(self, anchor, deltas):
+        ca_x = 0.5 * (anchor[0] + anchor[2])
+        da_x = anchor[2] - anchor[0]
+        ca_y = 0.5 * (anchor[1] + anchor[3])
+        da_y = anchor[3] - anchor[1]
+        new_ca_x = ca_x + deltas[0] * da_x
+        new_ca_y = ca_y + deltas[1] * da_y
+        new_da_x = deltas[2] * da_x
+        new_da_y = deltas[3] * da_y
+        new_x_l = new_ca_x - 0.5 * new_da_x
+        new_y_l = new_ca_y - 0.5 * new_da_y
+        new_x_r = new_ca_x + 0.5 * new_da_x
+        new_y_r = new_ca_y + 0.5 * new_da_y
+        return torch.tensor([new_x_l, new_y_l, new_x_r, new_y_r])
+
+
+    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction):
+        # Create figure and axes
+        fig, ax = plt.subplots()
+        _, c, x, y = img.shape
+        img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
+        img += 1.5
+        ax.imshow(img)
+        gt = self.transform_bbox_with_deltas(anchor, gt)
+        prediction = self.transform_bbox_with_deltas(anchor, prediction)
+        label = self.transform_bbox_with_deltas(anchor, label)
+        print(f'Gt bitches {gt}')
+        print(f'Label bitches {label}')
+        bbox = anchor.numpy()
+        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='b'
+                                 , facecolor='none')
+        ax.add_artist(rect)
+
+        bbox = gt.numpy()
+        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='g'
+                                 , facecolor='none')
+        ax.add_artist(rect)
+
+        bbox = prediction.numpy()
+        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='r'
+                                 , facecolor='none')
+        ax.add_artist(rect)
+
+        bbox = label.numpy()
+        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor=(0.5, 0.1, 0.3)
+                                 , facecolor='none')
+        ax.add_artist(rect)
+
+        rx, ry = rect.get_xy()
+        cx = rx + rect.get_width() / 2.0
+        cy = ry + rect.get_height() / 2.0
+
+
+        plt.show()
