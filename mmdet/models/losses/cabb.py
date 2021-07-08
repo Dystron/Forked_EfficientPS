@@ -44,7 +44,7 @@ def smooth_l1_loss_prime(x, beta=1.0):
     return np.clip(x / beta, a_min=-1, a_max=1)
 
 
-def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=10e-30):
+def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=0.00001):
     # interval is min and max for omega
     u, v = interval
     if objective_func(omega=u, omega_p=omega_p, omega_hat=omega_hat,
@@ -54,10 +54,11 @@ def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_thresho
                         beta=beta) <= 0:
         return v
     else:
-        m = u + v / 2
+        m = (u + v) / 2
         if v - u < eps_threshold:
             return m
-        elif objective_func(m) >= 0:
+        elif objective_func(m, omega_p=omega_p, omega_hat=omega_hat,
+                        beta=beta) >= 0:
             return FIND_MIN([u, m], objective_func, omega_p, omega_hat, beta)
         else:
             return FIND_MIN([m, v], objective_func, omega_p, omega_hat, beta)
@@ -85,18 +86,20 @@ def SOLVE_O1(omega_p, omega_hat, a1, b1, beta=1.0):
         return FIND_MIN(interval=[max(omega_0, omega_hat), omega_p], objective_func=epsilon_prime, omega_p=omega_p,
                         omega_hat=omega_hat, beta=beta)
     elif max(omega_0, omega_p) < omega_hat:
-        S += omega_hat, FIND_MIN(J_getter(1, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                                 objective_func=epsilon_prime, omega_p=omega_p, omega_hat=omega_hat, beta=beta), \
-             FIND_MIN(J_getter(2, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                      objective_func=epsilon_prime, omega_p=omega_p, omega_hat=omega_hat, beta=beta)
+        S.append(omega_hat)
+        S.append(FIND_MIN(J_getter(1, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
+                                 objective_func=epsilon_prime, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
+        S.append(FIND_MIN(J_getter(2, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
+                      objective_func=epsilon_prime, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
         if omega_hat <= 4 * np.sqrt(2):
-            S += FIND_MIN(J_getter(3, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta)
+            S.append(FIND_MIN(J_getter(3, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
+                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
         else:
-            S += FIND_MIN(J_getter(4, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta), FIND_MIN(
+            S.append(FIND_MIN(J_getter(4, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
+                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
+            S.append(FIND_MIN(
                 J_getter(5, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta)
+                objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
     return S[np.argmin([epsilon(omega=cur, omega_p=omega_p, omega_hat=omega_hat, beta=beta) for cur in S])]
 
 
@@ -138,8 +141,8 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
         # x dimension has not been cut
         delta_label = target[i][delta_id]
         omega_label = target[i][omega_id]
-    elif cases[i][left_or_top] and not cases[i][right_or_bottom]:
-        print('LEFT OR TOP CUT')
+    elif not cases[i][left_or_top] and cases[i][right_or_bottom]:
+        print('RIGHT OR BOTTOM CUT')
         # x cut left --> O1 first case
         ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
         da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
@@ -150,8 +153,8 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
         delta_star = a1 + 0.5 * omega_star
         delta_label = delta_star
         omega_label = omega_star
-    elif not cases[i][left_or_top] and cases[i][right_or_bottom]:
-        print('RIGHT OR BOTTOM CUT')
+    elif cases[i][left_or_top] and not cases[i][right_or_bottom]:
+        print('LEFT OR TOP CUT')
         # x cut right --> O1 second case
         ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
         da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
