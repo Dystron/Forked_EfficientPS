@@ -134,8 +134,6 @@ class ConvFCBBoxHead(BBoxHead):
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        print(f'Bbox and cls head input shape (after roi align): \n'
-              f'{x.shape}')
         # shared part
         if self.num_shared_convs > 0:
             for conv in self.shared_convs:
@@ -149,8 +147,6 @@ class ConvFCBBoxHead(BBoxHead):
 
             for fc in self.shared_fcs:
                 x = self.relu(fc(x))
-        print(f'Bbox specidifc head input shape: \n'
-              f'{x.shape}')
         # separate branches
         x_cls = x
         x_reg = x
