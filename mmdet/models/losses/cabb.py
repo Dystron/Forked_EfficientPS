@@ -46,7 +46,7 @@ def smooth_l1_loss_prime(x, beta=1.0):
     return np.clip(x / beta, a_min=-1, a_max=1)
 
 
-def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=0.00001):
+def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=0.000001):
     # interval is min and max for omega
     u, v = interval
     if objective_func(omega=u, omega_p=omega_p, omega_hat=omega_hat,
@@ -137,17 +137,17 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
     label = [None, None, None, None]
     # set the x dimension parameters of the target label
     if not cases[i][left_or_top] and not cases[i][right_or_bottom]:
-        #print('DEFAULT CASE!')
+        print('DEFAULT CASE!')
         # x dimension has not been cut
         delta_label = target[i][delta_id]
         omega_label = target[i][omega_id]
     elif not cases[i][left_or_top] and cases[i][right_or_bottom]:
-        #print('RIGHT OR BOTTOM CUT')
+        print('RIGHT OR BOTTOM CUT')
         # x cut left --> O1 first case
         # TODO correct like that?
         # + 1 is analogous to bbox2delta
-        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
-        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id]) + 0.5
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id] + 1
         a1 = target[i][delta_id] - 0.5 * target[i][omega_id]
         b1 = (crop_shapes[i][axis] - ca) / da
         omega_hat = 2 * (pred[i][delta_id] - a1)
@@ -156,10 +156,10 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
         delta_label = delta_star
         omega_label = omega_star
     elif cases[i][left_or_top] and not cases[i][right_or_bottom]:
-        #print('LEFT OR TOP CUT')
+        print('LEFT OR TOP CUT')
         # x cut right --> O1 second case
-        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
-        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id]) + 0.5
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id] + 1
         a1 = - ca / da
         b1 = target[i][delta_id] + 0.5 * target[i][omega_id]
         omega_hat = 2 * (b1 - pred[i][delta_id])
@@ -170,8 +170,8 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
     else:
         #print('BOTH')
         # x cut on both sides --> O2
-        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id])
-        da = proposal_list[i][omega_id] - proposal_list[i][delta_id]
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id]) +0.5
+        da = proposal_list[i][omega_id] - proposal_list[i][delta_id] - 1
         a2 = - ca / da
         b2 = (crop_shapes[i][delta_id] - ca) / da
         delta_label, omega_label = SOLVE_O2(delta_p=pred[i][delta_id], omega_p=pred[i][delta_id], a2=a2, b2=b2)
@@ -238,7 +238,7 @@ class cabb(nn.Module):
 
             #print(f'Bbox prediction: {pred.cpu()[i]}')
             #print(f'Associated Proposal: {proposal_list[i]}')
-            #print(f'Case for this prediction: {cases.cpu()[i]}')
+            print(f'Case for this prediction: {cases.cpu()[i]}')
             #print(f'GT for this prediction: {target.cpu()[i]}')
             #print(f'Crop dimensions: {crop_shapes[i]}')
             label = [None, None, None, None]
@@ -247,8 +247,11 @@ class cabb(nn.Module):
             # optimize in y
             label[1], label[3] = case_distinction(i, pred_copy, proposal_list, cases, target_copy, crop_shapes, axis=1)
             label = torch.tensor(label)
-            #print(f'New Target: {label}')
-            #self.plot_anchors_and_gt(img, target[i], proposal_list[i], label, pred[i])
+            # print(f'New Target: {label}')
+            label = np.array(label)
+            label[[2, 3]] = np.log(label[[2, 3]])
+            # TODO log of label here for plotting as it is not in log notation?
+            self.plot_anchors_and_gt(img, target[i], proposal_list[i], label, pred[i])
             #print("after plotting anchors in cabb FLAG")
             x = pred[i][[0,1]] - label[[0,1]]
             loss += bbox_loss(x, label[[2,3]], pred[i][[2,3]])
@@ -267,7 +270,7 @@ class cabb(nn.Module):
             avg_factor=avg_factor,
             **kwargs)
         return loss_bbox"""
-        return loss
+        return None
 
 
     def plot_anchors_and_gt(self, img, gt, anchor, label, prediction):
@@ -281,9 +284,9 @@ class cabb(nn.Module):
         gt = delta2bbox(anchor.unsqueeze(0), gt.unsqueeze(0), stds=[0.1, 0.1, 0.2, 0.2])[0]
         prediction = delta2bbox(anchor.unsqueeze(0), prediction.unsqueeze(0), stds=[0.1, 0.1, 0.2, 0.2])[0]
         label = delta2bbox(anchor.unsqueeze(0), torch.tensor(label).unsqueeze(0), stds=[0.1, 0.1, 0.2, 0.2])[0]
-        #print(f'coord Gt new {gt}')
-        #print(f'coord pred new {prediction}')
-        #print(f'coord Label new {label}')
+        print(f'coord Gt {gt}')
+        print(f'coord pred {prediction}')
+        print(f'coord cabb target  {label}')
         bbox = anchor.numpy()
         rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='r', linestyle="--"
                                  , facecolor='none')

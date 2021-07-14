@@ -244,6 +244,8 @@ class EfficientPS(BaseDetector):
         coord_with_mean = delta2bbox(pos_proposals[0], pos_targets, means=[.0, .0, .0, .0], stds=[0.1, 0.1, 0.2, 0.2])
 
         assert len(pos_proposals[0]) == len(pos_gt_bboxes[0])
+        print(f'img metas\n'
+              f'{img_metas}')
         # for pair_id in range(len(pos_proposals[0])):
         #     print(f"inputs gt, anchor for id {pair_id}", pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], cases[pair_id])
         #     self.plot_single_anchor_and_gt(img, pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], cases[pair_id], mean_target=coord_with_mean[pair_id])
@@ -582,7 +584,7 @@ class EfficientPS(BaseDetector):
                         fontsize=6, ha='center', va='center')
         plt.show()
 
-    def plot_single_anchor_and_gt(self, img, gt, anchor, case, target=None, mean_target=None):
+    def plot_single_anchor_and_gt(self, img, gt, anchor, case, mean_target=None):
         # Create figure and axes
         fig, ax = plt.subplots()
         _, c, x, y = img.shape
@@ -600,17 +602,6 @@ class EfficientPS(BaseDetector):
         cx = rx + rect.get_width() / 2.0
         cy = ry + rect.get_height() / 2.0
 
-        if target is not None:
-            bbox = target.cpu().numpy()
-            rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1,
-                                     edgecolor='g',
-                                     linestyle="--"
-                                     , facecolor='none', label="target")
-
-            ax.add_artist(rect)
-            rx, ry = rect.get_xy()
-            cx = rx + rect.get_width() / 2.0
-            cy = ry + rect.get_height() / 2.0
         if mean_target is not None:
             bbox = mean_target.cpu().numpy()
             rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1,
@@ -635,5 +626,5 @@ class EfficientPS(BaseDetector):
 
         ax.annotate(case.cpu().numpy(), (cx, cy), color='w', weight='bold',
                     fontsize=6, ha='center', va='center')
-        plt.title("anchor in red, gt in blue, target in green, target comp with mean in yellow")
+        plt.title("anchor in red, gt in blue, target comp with mean in yellow")
         plt.show()
