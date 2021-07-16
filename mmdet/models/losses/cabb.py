@@ -174,7 +174,7 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
         da = proposal_list[i][omega_id] - proposal_list[i][delta_id] - 1
         a2 = - ca / da
         b2 = (crop_shapes[i][delta_id] - ca) / da
-        delta_label, omega_label = SOLVE_O2(delta_p=pred[i][delta_id], omega_p=pred[i][delta_id], a2=a2, b2=b2)
+        delta_label, omega_label = SOLVE_O2(delta_p=pred[i][delta_id], omega_p=pred[i][omega_id], a2=a2, b2=b2)
     return delta_label, omega_label
 
 
