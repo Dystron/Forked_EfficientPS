@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from .utils import weighted_loss
 from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
-                        build_sampler, multiclass_nms, delta2bbox)
+                        build_sampler, multiclass_nms, delta2bbox, bbox2delta)
 from PIL import Image
 
 
@@ -47,7 +47,7 @@ def smooth_l1_loss_prime(x, beta=1.0):
     return np.clip(x / beta, a_min=-1, a_max=1)
 
 
-def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=0.000001):
+def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_threshold=0.1):
     # interval is min and max for omega
     u, v = interval
     if objective_func(omega=u, omega_p=omega_p, omega_hat=omega_hat,
@@ -61,7 +61,7 @@ def FIND_MIN(interval, objective_func, omega_p, omega_hat, beta=1.0, eps_thresho
         if v - u < eps_threshold:
             return m
         elif objective_func(m, omega_p=omega_p, omega_hat=omega_hat,
-                        beta=beta) >= 0:
+                            beta=beta) >= 0:
             return FIND_MIN([u, m], objective_func, omega_p, omega_hat, beta)
         else:
             return FIND_MIN([m, v], objective_func, omega_p, omega_hat, beta)
@@ -96,10 +96,10 @@ def SOLVE_O1(omega_p, omega_hat, a1, b1, beta=1.0):
                           objective_func=xi_prime, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
         if omega_hat <= 4 * np.sqrt(2):
             S.append(FIND_MIN(J_getter(3, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
+                              objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
         else:
             S.append(FIND_MIN(J_getter(4, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
-                          objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
+                              objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
             S.append(FIND_MIN(
                 J_getter(5, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
                 objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
@@ -169,9 +169,9 @@ def case_distinction(i, pred, proposal_list, cases, target, crop_shapes, axis=0)
         delta_label = delta_star
         omega_label = omega_star
     else:
-        #print('BOTH')
+        # print('BOTH')
         # x cut on both sides --> O2
-        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id]) +0.5
+        ca = 0.5 * (proposal_list[i][delta_id] + proposal_list[i][omega_id]) + 0.5
         da = proposal_list[i][omega_id] - proposal_list[i][delta_id] - 1
         a2 = - ca / da
         b2 = (crop_shapes[i][delta_id] - ca) / da
@@ -199,7 +199,7 @@ class cabb(nn.Module):
                 crop_shapes,
                 proposal_list,
                 sampling_results,
-                cases,
+                crop_info,
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
@@ -216,32 +216,32 @@ class cabb(nn.Module):
         dx, dy, dw, dh
         """
 
-
         # TODO: why are some ground truths = [0, 0, 0, 0] ?
         pred = pred.cpu().detach()
         target = target.cpu().detach()
-        #print(f'target shape cabb\n{target.shape}')
+        # print(f'target shape cabb\n{target.shape}')
         crop_shapes = crop_shapes.cpu().detach()
         proposal_list = proposal_list.cpu().detach()
-        cases = cases.cpu().detach()
+        orig_target = bbox2delta(proposal_list, crop_info["orig_gt_left_top"], stds=[0.1, 0.1, 0.2, 0.2])
+        cases = crop_info["cases"].cpu().detach()
         # todo we are doing exp as cabb seems not to use log scale
         pred_copy = pred.clone()
         pred_copy[:, [2, 3]] = np.exp(pred_copy[:, [2, 3]])
-        target_copy = target.clone()
+        target_copy = orig_target.clone()
         target_copy[:, [2, 3]] = np.exp(target_copy[:, [2, 3]])
 
-        assert pred.shape == target.shape
-        assert proposal_list.shape == target.shape
-        assert crop_shapes.shape[0] == target.shape[0]
-        assert pred.shape[0] == target.shape[0]
+        assert pred.shape == orig_target.shape
+        assert proposal_list.shape == orig_target.shape
+        assert crop_shapes.shape[0] == orig_target.shape[0]
+        assert pred.shape[0] == orig_target.shape[0]
         loss = 0
+        print(f'filename cabb {img_metas[0]["filename"]}')
         for i in range(pred.shape[0]):
-
-            #print(f'Bbox prediction: {pred.cpu()[i]}')
-            #print(f'Associated Proposal: {proposal_list[i]}')
+            # print(f'Bbox prediction: {pred.cpu()[i]}')
+            # print(f'Associated Proposal: {proposal_list[i]}')
             print(f'Case for this prediction: {cases.cpu()[i]}')
-            #print(f'GT for this prediction: {target.cpu()[i]}')
-            #print(f'Crop dimensions: {crop_shapes[i]}')
+            # print(f'GT for this prediction: {target.cpu()[i]}')
+            # print(f'Crop dimensions: {crop_shapes[i]}')
             label = [None, None, None, None]
             # optimize in x
             label[0], label[2] = case_distinction(i, pred_copy, proposal_list, cases, target_copy, crop_shapes, axis=0)
@@ -252,15 +252,14 @@ class cabb(nn.Module):
             label = np.array(label)
             label[[2, 3]] = np.log(label[[2, 3]])
             # TODO log of label here for plotting as it is not in log notation?
-            self.plot_anchors_and_gt(img_metas['filename'], target[i], proposal_list[i], label, pred[i])
-            #print("after plotting anchors in cabb FLAG")
-            x = pred[i][[0,1]] - label[[0,1]]
-            loss += bbox_loss(x, label[[2,3]], pred[i][[2,3]])
+            self.plot_anchors_and_gt(crop_info["orig_image"], orig_target[i], proposal_list[i], label, pred[i],
+                                     *crop_info["crop_left_top"], crop_shapes[i], crop_info["cases"][i])
+            # print("after plotting anchors in cabb FLAG")
+            x = pred[i][[0, 1]] - label[[0, 1]]
+            loss += bbox_loss(x, label[[2, 3]], pred[i][[2, 3]])
         loss /= pred.shape[0]
 
-
-            # MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
-
+        # MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
 
         """loss_bbox = self.loss_weight * smooth_l1_loss(
             pred,
@@ -273,23 +272,19 @@ class cabb(nn.Module):
         return loss_bbox"""
         return None
 
-
-    def rect_crop_to_original(self, bbox0, bbox1, bbox2, bbox3, crop_left_x, crop_top_y):
+    def rect_crop_to_original(self, bbox0, bbox1, bbox2, bbox3, crop_left_x, crop_top_y, ec, ls):
         return patches.Rectangle((bbox0 + crop_left_x, bbox1 + crop_top_y),
-                          bbox2 - bbox0, bbox3 - bbox1,
-                          linewidth=1, edgecolor='r',
-                          linestyle="--"
-                          , facecolor='none')
+                                 bbox2 - bbox0, bbox3 - bbox1,
+                                 linewidth=1, edgecolor=ec,
+                                 linestyle=ls, facecolor='none')
 
-
-    def plot_anchors_and_gt(self, img_name, gt, anchor, label, prediction, crop_left_x, crop_top_y):
-        img = Image.open(img_name)
+    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction, crop_left_x, crop_top_y, wh, case):
+        # img = np.array(Image.open(img_name))
         # Create figure and axes
+        print(f"crop_left_x crop_top_y\n"
+              f"{crop_left_x, crop_top_y, crop_left_x + wh[0], crop_top_y + wh[1]}")
         fig, ax = plt.subplots()
-        _, c, x, y = img.shape
-        img = img.permute(0, 2, 3, 1)[0].cpu().numpy()
-        img += 1.5
-        ax.imshow(img)
+        ax.imshow(img[0].cpu().numpy())
         # we unsqueeze as a 2d tensor is expercted and take the 0st elemt as it returns a list
         gt = delta2bbox(anchor.unsqueeze(0), gt.unsqueeze(0), stds=[0.1, 0.1, 0.2, 0.2])[0]
         prediction = delta2bbox(anchor.unsqueeze(0), prediction.unsqueeze(0), stds=[0.1, 0.1, 0.2, 0.2])[0]
@@ -298,20 +293,30 @@ class cabb(nn.Module):
         print(f'coord pred {prediction}')
         print(f'coord cabb target  {label}')
         bbox = anchor.numpy()
-        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
+        ax.add_artist(self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="r", ls="-"))
 
         bbox = gt.numpy()
-        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
+        ax.add_artist(self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="b", ls="-."))
 
         bbox = prediction.numpy()
-        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
+        ax.add_artist(self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="g", ls="--"))
 
         bbox = label.numpy()
-        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
+        rect = self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="y", ls=":")
+        ax.add_artist(rect)
+
+        rect = patches.Rectangle((crop_left_x, crop_top_y),
+                                 wh[0].cuda(), wh[1].cuda(),
+                                 linewidth=1, edgecolor="c",
+                                 linestyle="-", facecolor='none')
+        ax.add_artist(rect)
 
         rx, ry = rect.get_xy()
         cx = rx + rect.get_width() / 2.0
         cy = ry + rect.get_height() / 2.0
+
+        ax.annotate(case, (cx, cy), color='m', weight='bold',
+                    fontsize=6, ha='center', va='center')
 
         plt.title("anchor in red, gt in blue, prediction in green, cabb target in yellow")
         plt.show()

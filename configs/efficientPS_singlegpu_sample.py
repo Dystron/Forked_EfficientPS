@@ -139,11 +139,11 @@ train_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True, with_seg=True),
     dict(type='Resize', img_scale=(512, 256), ratio_range=(0.5, 2.0), keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
-    dict(type='RandomCrop', crop_size=(256, 512)),
+    dict(type='RandomCrop', crop_size=(128, 256)),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg', 'cases']),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg', 'crop_info']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),

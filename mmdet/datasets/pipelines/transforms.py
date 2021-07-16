@@ -374,48 +374,62 @@ class RandomCrop(object):
         self.crop_size = crop_size
 
     def __call__(self, results):
+        results["crop_info"] = {}
         img = results['img']
         margin_h = max(img.shape[0] - self.crop_size[0], 0)
         margin_w = max(img.shape[1] - self.crop_size[1], 0)
         offset_h = np.random.randint(0, margin_h + 1)
         offset_w = np.random.randint(0, margin_w + 1)
+
+        print(f'filename transform {results["img_info"]["file_name"]} cropped at\n'
+              f'{offset_w, offset_h}\n'
+              f'margin was {margin_w, margin_h}\n'
+              f'image size {img.shape[0], img.shape[1]}')
+        results["crop_info"]["crop_left_top"] = (offset_w, offset_h)
         crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
         crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
         crop_x_dim = crop_x2 - crop_x1
         crop_y_dim = crop_y2 - crop_y1
-
         # crop the image
+        # TODO remove
+        results["crop_info"]["orig_image"] = img.copy()
+
         img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
         img_shape = img.shape
         results['img'] = img
         results['img_shape'] = img_shape
 
+
         # crop bboxes accordingly and clip to the image boundary
+        print(f"the keys\n"
+              f"{results.get('bbox_fields', [])}")
         for key in results.get('bbox_fields', []):
             bbox_offset = np.array([offset_w, offset_h, offset_w, offset_h],
                                    dtype=np.float32)
+            # TODO delte
+            tmp = results[key].copy()
             bboxes = results[key] - bbox_offset
+            if key == 'gt_bboxes':
+                results["crop_info"]["orig_gt_left_top"] = bboxes.copy()
+                lower_x_out = np.where(results[key][:, 0] < crop_x1)
+                lower_y_out = np.where(results[key][:, 1] < crop_y1)
+
+                upper_x_cropped = np.where(results[key][:, 2] > crop_x2)
+                upper_y_cropped = np.where(results[key][:, 3] > crop_y2)
+                """
+                cases:
+                [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
+                """
+                cases = np.empty_like(results[key])
+                for id in range(cases.shape[0]):
+                    cases[id] = [id in lower_x_out[0], id in upper_x_cropped[0], id in lower_y_out[0],
+                                 id in upper_y_cropped[0]]
+                results["crop_info"]["cases"] = cases
+
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1] - 1)
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0] - 1)
             results[key] = bboxes
 
-            # other cases do not need to be checked:
-            # e.g. if the upper x or y is now also 0 as that is checked for valid ids and then removed
-            # also if the lower x or y is now crop_dim - 1 as that is also an invalid case
-            lower_x_out = np.where(results[key][:, 0] < offset_w)
-            lower_y_out = np.where(results[key][:, 1] < offset_h)
-
-            upper_x_cropped = np.where(results[key][:, 2] > offset_w + crop_x_dim)
-            upper_y_cropped = np.where(results[key][:, 3] > offset_h + crop_y_dim)
-            """
-            cases:
-            [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
-            """
-            cases = np.empty_like(results[key])
-            for id in range(cases.shape[0]):
-                cases[id] = [id in lower_x_out[0], id in upper_x_cropped[0], id in lower_y_out[0],
-                             id in upper_y_cropped[0]]
-            results["cases"] = cases
         # crop semantic seg
         for key in results.get('seg_fields', []):
             results[key] = results[key][crop_y1:crop_y2, crop_x1:crop_x2]
@@ -427,11 +441,22 @@ class RandomCrop(object):
                     gt_bboxes[:, 3] > gt_bboxes[:, 1])
             # if no gt bbox remains after cropping, just skip this image
             if not np.any(valid_inds):
+                print("IMAGE RELOADED")
                 return None
             results['gt_bboxes'] = gt_bboxes[valid_inds, :]
             # also cut all case information for removed bboxes
-            cases = results["cases"]
-            results["cases"] = cases[valid_inds, :]
+            results["crop_info"]["orig_gt_left_top"] = results["crop_info"]["orig_gt_left_top"][valid_inds, :]
+            results["crop_info"]["cases"] = results["crop_info"]["cases"][valid_inds, :]
+            print(f'crop xyxy\n'
+                  f'{crop_x1, crop_y1, crop_x2, crop_y2}')
+            print(f'cases\n'
+                  f'{results["crop_info"]["cases"]}')
+            print(f'box original\n'
+                  f'{tmp[valid_inds, :]}')
+            print(f'gt_bboxes_abgeschnitten\n'
+                  f'{results["gt_bboxes"]}')
+            print(f'gt_bboxes_crop\n'
+                  f'{results["crop_info"]["orig_gt_left_top"]}')
             if 'gt_labels' in results:
                 results['gt_labels'] = results['gt_labels'][valid_inds]
 

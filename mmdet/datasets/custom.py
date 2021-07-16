@@ -127,8 +127,9 @@ class CustomDataset(Dataset):
         return np.random.choice(pool)
 
     def __getitem__(self, idx):
-        # TODO remove later
-        idx = 0
+        idx = 78
+        print(f"filename dataloader {idx}\n"
+              f"{self.img_infos[idx]}")
         if self.test_mode:
             return self.prepare_test_img(idx)
         while True:

@@ -175,7 +175,7 @@ class EfficientPS(BaseDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      cases,
+                      crop_info,
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       gt_semantic_seg=None):
@@ -212,8 +212,7 @@ class EfficientPS(BaseDetector):
             bbox_feats = self.shared_head(bbox_feats)
 
         cls_score, bbox_pred = self.bbox_head(bbox_feats)
-        # print(f'cases before get_cases\n{cases}')
-        cases = self.bbox_head.get_cases(cases, sampling_results)
+        crop_info["cases"] = self.bbox_head.get_cases_per_prediction(crop_info["cases"], sampling_results)
         proposal_list = self.bbox_head.get_associated_anchors(sampling_results)
         # print(f"in efficientPS these are the assigned anchors:\n"
         #      f"{proposal_list}")
@@ -247,15 +246,16 @@ class EfficientPS(BaseDetector):
         print(f'img metas\n'
               f'{img_metas}')
         # for pair_id in range(len(pos_proposals[0])):
-        #     print(f"inputs gt, anchor for id {pair_id}", pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], cases[pair_id])
-        #     self.plot_single_anchor_and_gt(img, pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], cases[pair_id], mean_target=coord_with_mean[pair_id])
+        #     print(f"inputs gt, anchor for id {pair_id}", pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id])
+        #     self.plot_single_anchor_and_gt(img, pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id], mean_target=coord_with_mean[pair_id])
         # this shows that anchor and gt_fit together visually
 
 
 
         crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
         crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
-        loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, cases,
+        crop_info["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results, crop_info["orig_gt_left_top"])
+        loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, crop_info,
                                         *bbox_targets)
 
 
@@ -266,7 +266,7 @@ class EfficientPS(BaseDetector):
 
         # plot positive predictions, positive anchors and ground truth boxes
         # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'b')
-        # self.plot_anchors_and_gt(img, gt_bboxes, [bboxes.detach()[:sampling_results[0].pos_bboxes.shape[0]]], cases)
+        # self.plot_anchors_and_gt(img, gt_bboxes, [bboxes.detach()[:sampling_results[0].pos_bboxes.shape[0]]], crop_info["cases"])
 
         losses.update(loss_bbox)
 

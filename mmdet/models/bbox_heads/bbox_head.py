@@ -98,6 +98,14 @@ class BBoxHead(nn.Module):
             target_stds=self.target_stds)
         return cls_reg_targets
 
+    def get_original_target(self, sampling_results, original_targets):
+        original_targets = original_targets.cpu()
+        org_targets = torch.tensor([])
+        for i, res in enumerate(sampling_results):
+            org_target_for_each_pred = original_targets[i][res.pos_assigned_gt_inds.cpu().numpy(), :]
+            org_targets = torch.cat((org_targets, torch.tensor(org_target_for_each_pred)))
+        return org_targets
+
     def get_crop_dimensions(self, crop_shapes, sampling_results):
         """
         Return a 2-d tensor of crop dimensions (#values = #predictions_per_image * #images_in_batch) in x, y format
@@ -110,8 +118,7 @@ class BBoxHead(nn.Module):
             dimensions = torch.cat((dimensions, torch.tensor(crop_dim_for_each_pred)))
         return dimensions
 
-
-    def get_cases(self, cases, sampling_results):
+    def get_cases_per_prediction(self, cases, sampling_results):
         """
         Returns cases of all images and predictions as single 2-D torch tensor.
         cases: 3-d troch tensor of cases, first dim is #images
@@ -135,7 +142,6 @@ class BBoxHead(nn.Module):
             cat_anchors = torch.cat((cat_anchors, res.pos_bboxes.cpu()))
         return cat_anchors
 
-
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
              img_meta,
@@ -144,7 +150,7 @@ class BBoxHead(nn.Module):
              crop_shapes,
              proposal_list,
              sampling_results,
-             cases,
+             crop_info,
              labels,
              label_weights,
              bbox_targets,
@@ -175,8 +181,8 @@ class BBoxHead(nn.Module):
                 # print(f'Number of positive BBox predictions: {pos_bbox_pred.shape[0]}')
                 # print(f'Number of cases (should be same as # gt boxes): {cases.shape[0]}')
                 # print(f'Number of targets: {bbox_targets.shape[0]}')
-                #print(f'Positive BBox predictions: \n {pos_bbox_pred}')
-                if cases is not None and crop_shapes is not None:
+                # print(f'Positive BBox predictions: \n {pos_bbox_pred}')
+                if crop_info is not None and crop_shapes is not None:
                     losses['loss_bbox'] = self.loss_bbox(
                         img_meta,
                         pos_bbox_pred,
@@ -184,7 +190,7 @@ class BBoxHead(nn.Module):
                         crop_shapes,
                         proposal_list,
                         sampling_results,
-                        cases,
+                        crop_info,
                         bbox_weights[pos_inds.type(torch.bool)],
                         avg_factor=bbox_targets.size(0),
                         reduction_override=reduction_override)
@@ -236,7 +242,7 @@ class BBoxHead(nn.Module):
 
             return det_bboxes, det_labels
 
-    @force_fp32(apply_to=('bbox_preds', ))
+    @force_fp32(apply_to=('bbox_preds',))
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
         """Refine bboxes during training.
 
@@ -314,7 +320,7 @@ class BBoxHead(nn.Module):
 
         return bboxes_list
 
-    @force_fp32(apply_to=('bbox_pred', ))
+    @force_fp32(apply_to=('bbox_pred',))
     def regress_by_class(self, rois, label, bbox_pred, img_meta):
         """Regress the bbox for the predicted class. Used in Cascade R-CNN.
 
