@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 from .utils import weighted_loss
 from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
                         build_sampler, multiclass_nms, delta2bbox)
+from PIL import Image
 
 
 def xi(omega, omega_p, omega_hat, beta=1.0):
@@ -251,7 +252,7 @@ class cabb(nn.Module):
             label = np.array(label)
             label[[2, 3]] = np.log(label[[2, 3]])
             # TODO log of label here for plotting as it is not in log notation?
-            self.plot_anchors_and_gt(img_metas, target[i], proposal_list[i], label, pred[i])
+            self.plot_anchors_and_gt(img_metas['filename'], target[i], proposal_list[i], label, pred[i])
             #print("after plotting anchors in cabb FLAG")
             x = pred[i][[0,1]] - label[[0,1]]
             loss += bbox_loss(x, label[[2,3]], pred[i][[2,3]])
@@ -281,7 +282,8 @@ class cabb(nn.Module):
                           , facecolor='none')
 
 
-    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction, crop_left_x, crop_top_y):
+    def plot_anchors_and_gt(self, img_name, gt, anchor, label, prediction, crop_left_x, crop_top_y):
+        img = Image.open(img_name)
         # Create figure and axes
         fig, ax = plt.subplots()
         _, c, x, y = img.shape
