@@ -192,7 +192,7 @@ class cabb(nn.Module):
         self.loss_weight = loss_weight
 
     def forward(self,
-                img,
+                img_metas,
                 pred,
                 target,
                 crop_shapes,
@@ -251,7 +251,7 @@ class cabb(nn.Module):
             label = np.array(label)
             label[[2, 3]] = np.log(label[[2, 3]])
             # TODO log of label here for plotting as it is not in log notation?
-            self.plot_anchors_and_gt(img, target[i], proposal_list[i], label, pred[i])
+            self.plot_anchors_and_gt(img_metas, target[i], proposal_list[i], label, pred[i])
             #print("after plotting anchors in cabb FLAG")
             x = pred[i][[0,1]] - label[[0,1]]
             loss += bbox_loss(x, label[[2,3]], pred[i][[2,3]])
@@ -273,7 +273,15 @@ class cabb(nn.Module):
         return None
 
 
-    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction):
+    def rect_crop_to_original(self, bbox0, bbox1, bbox2, bbox3, crop_left_x, crop_top_y):
+        return patches.Rectangle((bbox0 + crop_left_x, bbox1 + crop_top_y),
+                          bbox2 - bbox0, bbox3 - bbox1,
+                          linewidth=1, edgecolor='r',
+                          linestyle="--"
+                          , facecolor='none')
+
+
+    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction, crop_left_x, crop_top_y):
         # Create figure and axes
         fig, ax = plt.subplots()
         _, c, x, y = img.shape
@@ -288,24 +296,16 @@ class cabb(nn.Module):
         print(f'coord pred {prediction}')
         print(f'coord cabb target  {label}')
         bbox = anchor.numpy()
-        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='r', linestyle="--"
-                                 , facecolor='none')
-        ax.add_artist(rect)
+        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
 
         bbox = gt.numpy()
-        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='b',linestyle="--"
-                                 , facecolor='none')
-        ax.add_artist(rect)
+        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
 
         bbox = prediction.numpy()
-        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor='g', linestyle=":"
-                                 , facecolor='none')
-        ax.add_artist(rect)
+        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
 
         bbox = label.numpy()
-        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], linewidth=1, edgecolor="y", linestyle=":"
-                                 , facecolor='none')
-        ax.add_artist(rect)
+        ax.add_artist(self.rect_crop_to_original(self, bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y))
 
         rx, ry = rect.get_xy()
         cx = rx + rect.get_width() / 2.0

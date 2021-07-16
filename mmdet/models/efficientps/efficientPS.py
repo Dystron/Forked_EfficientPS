@@ -255,7 +255,7 @@ class EfficientPS(BaseDetector):
 
         crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
         crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
-        loss_bbox = self.bbox_head.loss(img, cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, cases,
+        loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, cases,
                                         *bbox_targets)
 
 
