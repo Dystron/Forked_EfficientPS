@@ -402,11 +402,11 @@ class RandomCrop(object):
             # other cases do not need to be checked:
             # e.g. if the upper x or y is now also 0 as that is checked for valid ids and then removed
             # also if the lower x or y is now crop_dim - 1 as that is also an invalid case
-            lower_x_out = np.where(results[key][:, 0] == 0)
-            lower_y_out = np.where(results[key][:, 1] == 0)
+            lower_x_out = np.where(results[key][:, 0] < offset_w)
+            lower_y_out = np.where(results[key][:, 1] < offset_h)
 
-            upper_x_cropped = np.where(results[key][:, 2] == crop_x_dim - 1)
-            upper_y_cropped = np.where(results[key][:, 3] == crop_y_dim - 1)
+            upper_x_cropped = np.where(results[key][:, 2] > offset_w + crop_x_dim)
+            upper_y_cropped = np.where(results[key][:, 3] > offset_h + crop_y_dim)
             """
             cases:
             [lower x cropped?][upper x cropped?][lower y cropped?][upper y cropped]
