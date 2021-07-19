@@ -243,8 +243,8 @@ class EfficientPS(BaseDetector):
         coord_with_mean = delta2bbox(pos_proposals[0], pos_targets, means=[.0, .0, .0, .0], stds=[0.1, 0.1, 0.2, 0.2])
 
         assert len(pos_proposals[0]) == len(pos_gt_bboxes[0])
-        print(f'img metas\n'
-              f'{img_metas}')
+        # print(f'img metas\n'
+        #       f'{img_metas}')
         # for pair_id in range(len(pos_proposals[0])):
         #     print(f"inputs gt, anchor for id {pair_id}", pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id])
         #     self.plot_single_anchor_and_gt(img, pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id], mean_target=coord_with_mean[pair_id])

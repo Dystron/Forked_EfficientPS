@@ -380,11 +380,6 @@ class RandomCrop(object):
         margin_w = max(img.shape[1] - self.crop_size[1], 0)
         offset_h = np.random.randint(0, margin_h + 1)
         offset_w = np.random.randint(0, margin_w + 1)
-
-        print(f'filename transform {results["img_info"]["file_name"]} cropped at\n'
-              f'{offset_w, offset_h}\n'
-              f'margin was {margin_w, margin_h}\n'
-              f'image size {img.shape[0], img.shape[1]}')
         results["crop_info"]["crop_left_top"] = (offset_w, offset_h)
         crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
         crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
@@ -401,8 +396,6 @@ class RandomCrop(object):
 
 
         # crop bboxes accordingly and clip to the image boundary
-        print(f"the keys\n"
-              f"{results.get('bbox_fields', [])}")
         for key in results.get('bbox_fields', []):
             bbox_offset = np.array([offset_w, offset_h, offset_w, offset_h],
                                    dtype=np.float32)
@@ -441,22 +434,11 @@ class RandomCrop(object):
                     gt_bboxes[:, 3] > gt_bboxes[:, 1])
             # if no gt bbox remains after cropping, just skip this image
             if not np.any(valid_inds):
-                print("IMAGE RELOADED")
                 return None
             results['gt_bboxes'] = gt_bboxes[valid_inds, :]
             # also cut all case information for removed bboxes
             results["crop_info"]["orig_gt_left_top"] = results["crop_info"]["orig_gt_left_top"][valid_inds, :]
             results["crop_info"]["cases"] = results["crop_info"]["cases"][valid_inds, :]
-            print(f'crop xyxy\n'
-                  f'{crop_x1, crop_y1, crop_x2, crop_y2}')
-            print(f'cases\n'
-                  f'{results["crop_info"]["cases"]}')
-            print(f'box original\n'
-                  f'{tmp[valid_inds, :]}')
-            print(f'gt_bboxes_abgeschnitten\n'
-                  f'{results["gt_bboxes"]}')
-            print(f'gt_bboxes_crop\n'
-                  f'{results["crop_info"]["orig_gt_left_top"]}')
             if 'gt_labels' in results:
                 results['gt_labels'] = results['gt_labels'][valid_inds]
 
