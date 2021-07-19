@@ -99,10 +99,10 @@ class BBoxHead(nn.Module):
         return cls_reg_targets
 
     def get_original_target(self, sampling_results, original_targets):
-        original_targets = original_targets.cpu()
-        org_targets = torch.tensor([])
+        original_targets = original_targets
+        org_targets = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
-            org_target_for_each_pred = original_targets[i][res.pos_assigned_gt_inds.cpu().numpy(), :]
+            org_target_for_each_pred = original_targets[i][res.pos_assigned_gt_inds, :]
             org_targets = torch.cat((org_targets, torch.tensor(org_target_for_each_pred)))
         return org_targets
 
@@ -112,10 +112,10 @@ class BBoxHead(nn.Module):
         image_shapes: list of image shape for each image in batch
         sampling_results: information on how the proposals have been sampled.
         """
-        dimensions = torch.tensor([])
+        dimensions = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
             crop_dim_for_each_pred = [[crop_shapes[i][1], crop_shapes[i][0]] for j in range(res.pos_bboxes.shape[0])]
-            dimensions = torch.cat((dimensions, torch.tensor(crop_dim_for_each_pred)))
+            dimensions = torch.cat((dimensions, torch.tensor(crop_dim_for_each_pred, device="cuda")))
         return dimensions
 
     def get_cases_per_prediction(self, cases, sampling_results):
@@ -124,10 +124,10 @@ class BBoxHead(nn.Module):
         cases: 3-d troch tensor of cases, first dim is #images
         sampling_results: information on how the proposals have been sampled.
         """
-        cases = cases.cpu()
-        cat_cases = torch.tensor([])
+        cases = cases
+        cat_cases = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
-            image_cases = cases[i][res.pos_assigned_gt_inds.cpu().numpy(), :]
+            image_cases = cases[i][res.pos_assigned_gt_inds, :]
             cat_cases = torch.cat((cat_cases, image_cases))
         return cat_cases
 
@@ -136,10 +136,9 @@ class BBoxHead(nn.Module):
         Returns the anchors which are associated with the predictions as single 2-D torch tensor.
         sampling_results: information on how the proposals have been sampled, includes the anchors.
         """
-        cat_anchors = torch.tensor([])
+        cat_anchors = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
-            # print(f'')
-            cat_anchors = torch.cat((cat_anchors, res.pos_bboxes.cpu()))
+            cat_anchors = torch.cat((cat_anchors, res.pos_bboxes))
         return cat_anchors
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
