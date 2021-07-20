@@ -219,12 +219,10 @@ class cabb(nn.Module):
         self.loss_weight = loss_weight
 
     def forward(self,
-                img_metas,
                 pred,
                 target,
                 crop_shapes,
                 proposal_list,
-                sampling_results,
                 crop_info,
                 weight=None,
                 avg_factor=None,
@@ -241,21 +239,18 @@ class cabb(nn.Module):
         dx, dy, dw, dh
         """
 
-        orig_target = bbox2delta(proposal_list, crop_info["orig_gt_left_top"])
+        target = bbox2delta(proposal_list, crop_info["orig_gt_left_top"])
         cases = crop_info["cases"]
         # we are doing exp as cabb does not use log scale
         # TODO remove once we do no longer plot we can remove the copy or move the reversion of this to plot
-        pred_copy = pred.clone()
-        pred_copy[:, [2, 3]] = torch.exp(pred_copy[:, [2, 3]])
-        target_copy = orig_target.clone()
-        target_copy[:, [2, 3]] = torch.exp(target_copy[:, [2, 3]])
-        loss = self.loss_weight * batched_bbox_loss(pred=pred_copy, target=target_copy, proposal_list=proposal_list,
+        pred[:, [2, 3]] = torch.exp(pred[:, [2, 3]])
+        target[:, [2, 3]] = torch.exp(target[:, [2, 3]])
+        loss = self.loss_weight * batched_bbox_loss(pred=pred, target=target, proposal_list=proposal_list,
                                                     cases=cases, crop_shapes=crop_shapes,
                                                     crop_info=crop_info, plot=plot, beta=self.beta, weight=weight,
                                                     reduction=reduction,
                                                     avg_factor=avg_factor,
                                                     **kwargs)
-        # TODO remove MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
         return loss
 
 

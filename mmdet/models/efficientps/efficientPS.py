@@ -218,10 +218,9 @@ class EfficientPS(BaseDetector):
             crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
             crop_info["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results,
                                                                                crop_info["orig_gt_left_top"])
-            loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list,
-                                            sampling_results, crop_info, *bbox_targets)
+            loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_shapes, proposal_list, crop_info, *bbox_targets)
         else:
-            loss_bbox = self.bbox_head.loss(None, cls_score, bbox_pred, None, None, None, None, *bbox_targets)
+            loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, None, None, None, *bbox_targets)
         losses.update(loss_bbox)
 
         pos_rois = bbox2roi(

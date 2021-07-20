@@ -145,12 +145,10 @@ class BBoxHead(nn.Module):
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
-             img_meta,
              cls_score,
              bbox_pred,
              crop_shapes,
              proposal_list,
-             sampling_results,
              crop_info,
              labels,
              label_weights,
@@ -181,12 +179,10 @@ class BBoxHead(nn.Module):
                            labels[pos_inds.type(torch.bool)]]
                 if self.using_cabb:
                     losses['loss_bbox'] = self.loss_bbox(
-                        img_meta,
                         pos_bbox_pred,
                         bbox_targets[pos_inds.type(torch.bool)],
                         crop_shapes,
                         proposal_list,
-                        sampling_results,
                         crop_info,
                         bbox_weights[pos_inds.type(torch.bool)],
                         avg_factor=bbox_targets.size(0),
