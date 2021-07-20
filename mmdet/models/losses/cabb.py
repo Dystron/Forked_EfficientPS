@@ -134,9 +134,6 @@ def SOLVE_O1(omega_p, omega_hat, a1, b1, beta=1.0):
             S.append(FIND_MIN(
                 J_getter(5, omega_0=omega_0, omega_p=omega_p, beta=beta, omega_hat=omega_hat),
                 objective_func=sigma, omega_p=omega_p, omega_hat=omega_hat, beta=beta))
-    for val in S:
-        if val <= 0:
-            print(f"value {val} not allowed in S {S}, {omega_p, omega_hat, a1, b1}")
     return S[
         torch.argmin(torch.tensor([xi(omega=cur, omega_p=omega_p, omega_hat=omega_hat) for cur in S], device="cuda"))]
 
@@ -232,7 +229,7 @@ class cabb(nn.Module):
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
-                plot=True,
+                plot=False,
                 **kwargs):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
