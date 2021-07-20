@@ -104,8 +104,8 @@ class BBoxHead(nn.Module):
         original_targets = original_targets
         org_targets = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
-            org_target_for_each_pred = original_targets[i][res.pos_assigned_gt_inds, :]
-            org_targets = torch.cat((org_targets, torch.tensor(org_target_for_each_pred)))
+            org_target_for_each_pred = original_targets[i]["orig_gt_left_top"][res.pos_assigned_gt_inds, :].cuda()
+            org_targets = torch.cat((org_targets, org_target_for_each_pred))
         return org_targets
 
     def get_crop_dimensions(self, crop_shapes, sampling_results):
@@ -129,7 +129,7 @@ class BBoxHead(nn.Module):
         cases = cases
         cat_cases = torch.tensor([], device="cuda")
         for i, res in enumerate(sampling_results):
-            image_cases = cases[i][res.pos_assigned_gt_inds, :]
+            image_cases = cases[i]["cases"][res.pos_assigned_gt_inds, :].cuda()
             cat_cases = torch.cat((cat_cases, image_cases))
         return cat_cases
 

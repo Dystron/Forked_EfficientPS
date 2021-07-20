@@ -398,7 +398,7 @@ class RandomCrop(object):
             bboxes = results[key] - bbox_offset
             if key == 'gt_bboxes':
                 # add the relevant information about the crop to a dict which can be used in cabb loss
-                results["crop_info"]["orig_gt_left_top"] = bboxes.copy()
+                results["crop_info"]["orig_gt_left_top"] = torch.tensor(bboxes)
                 lower_x_out = np.where(results[key][:, 0] < crop_x1)
                 lower_y_out = np.where(results[key][:, 1] < crop_y1)
 
@@ -412,7 +412,7 @@ class RandomCrop(object):
                 for id in range(cases.shape[0]):
                     cases[id] = [id in lower_x_out[0], id in upper_x_cropped[0], id in lower_y_out[0],
                                  id in upper_y_cropped[0]]
-                results["crop_info"]["cases"] = cases
+                results["crop_info"]["cases"] = torch.tensor(cases)
 
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1] - 1)
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0] - 1)

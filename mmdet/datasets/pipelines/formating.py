@@ -173,16 +173,22 @@ class Collect(object):
     def __init__(self,
                  keys,
                  meta_keys=('filename', 'ori_shape', 'img_shape', 'pad_shape',
-                            'scale_factor', 'flip', 'img_norm_cfg')):
+                            'scale_factor', 'flip', 'img_norm_cfg'),
+                 crop_keys=("orig_image", "crop_left_top", "orig_gt_left_top", "cases")):
         self.keys = keys
         self.meta_keys = meta_keys
+        self.crop_keys = crop_keys
 
     def __call__(self, results):
         data = {}
         img_meta = {}
+        crop_info = {}
         for key in self.meta_keys:
             img_meta[key] = results[key]
         data['img_metas'] = DC(img_meta, cpu_only=True)
+        for key in self.crop_keys:
+            crop_info[key] = results["crop_info"][key]
+        data['crop_info'] = DC(crop_info, cpu_only=True)
         for key in self.keys:
             data[key] = results[key]
         return data

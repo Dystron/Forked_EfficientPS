@@ -211,14 +211,15 @@ class EfficientPS(BaseDetector):
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
         if self.bbox_head.using_cabb:
+            # crop_info_cat = {"crop_left_top": crop_info["crop_left_top"], "orig_image": crop_info["orig_image"]}
+            crop_info_cat = {}
             # when using cabb we need to prepare additional information regarding where and how a gt box was cropped
-            crop_info["cases"] = self.bbox_head.get_cases_per_prediction(crop_info["cases"], sampling_results)
+            crop_info_cat["cases"] = self.bbox_head.get_cases_per_prediction(crop_info, sampling_results)
             proposal_list = self.bbox_head.get_associated_anchors(sampling_results)
             crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
             crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
-            crop_info["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results,
-                                                                               crop_info["orig_gt_left_top"])
-            loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_shapes, proposal_list, crop_info, *bbox_targets)
+            crop_info_cat["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results, crop_info)
+            loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_shapes, proposal_list, crop_info_cat, *bbox_targets)
         else:
             loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, None, None, None, *bbox_targets)
         losses.update(loss_bbox)
