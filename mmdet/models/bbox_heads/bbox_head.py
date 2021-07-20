@@ -46,7 +46,10 @@ class BBoxHead(nn.Module):
         self.fp16_enabled = False
 
         self.loss_cls = build_loss(loss_cls)
-        # print(f'Using bbox loss:{loss_bbox}')
+        # set a flag if cabb is used, in that case additional information for the loss needs to be prepared
+        self.using_cabb = False
+        if loss_bbox.type == "cabb":
+            self.using_cabb = True
         self.loss_bbox = build_loss(loss_bbox)
 
         in_channels = self.in_channels
@@ -85,7 +88,6 @@ class BBoxHead(nn.Module):
         neg_proposals = [res.neg_bboxes for res in sampling_results]
         pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
         pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
-        # print(f"get target pos labels\n{pos_gt_labels}")
         reg_classes = 1 if self.reg_class_agnostic else self.num_classes
         cls_reg_targets = bbox_target(
             pos_proposals,
@@ -177,11 +179,7 @@ class BBoxHead(nn.Module):
                         bbox_pred.size(0), -1,
                         4)[pos_inds.type(torch.bool),
                            labels[pos_inds.type(torch.bool)]]
-                # print(f'Number of positive BBox predictions: {pos_bbox_pred.shape[0]}')
-                # print(f'Number of cases (should be same as # gt boxes): {cases.shape[0]}')
-                # print(f'Number of targets: {bbox_targets.shape[0]}')
-                # print(f'Positive BBox predictions: \n {pos_bbox_pred}')
-                if crop_info is not None and crop_shapes is not None:
+                if self.using_cabb:
                     losses['loss_bbox'] = self.loss_bbox(
                         img_meta,
                         pos_bbox_pred,
@@ -306,7 +304,6 @@ class BBoxHead(nn.Module):
             bbox_pred_ = bbox_preds[inds]
             img_meta_ = img_metas[i]
             pos_is_gts_ = pos_is_gts[i]
-
             bboxes = self.regress_by_class(bboxes_, label_, bbox_pred_,
                                            img_meta_)
 

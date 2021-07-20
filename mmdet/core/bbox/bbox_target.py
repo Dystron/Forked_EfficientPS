@@ -29,7 +29,6 @@ def bbox_target(pos_bboxes_list,
         label_weights = torch.cat(label_weights, 0)
         bbox_targets = torch.cat(bbox_targets, 0)
         bbox_weights = torch.cat(bbox_weights, 0)
-    # print(f'Multi BBox target shape: {bbox_targets.shape}')
     return labels, label_weights, bbox_targets, bbox_weights
 
 
@@ -52,15 +51,12 @@ def bbox_target_single(pos_bboxes,
         labels[:num_pos] = pos_gt_labels
         pos_weight = 1.0 if cfg.pos_weight <= 0 else cfg.pos_weight
         label_weights[:num_pos] = pos_weight
-        # print(f'in single target these are the anchors:\n'
-        #      f'{pos_bboxes}')
         pos_bbox_targets = bbox2delta(pos_bboxes, pos_gt_bboxes, target_means,
                                       target_stds)
         bbox_targets[:num_pos, :] = pos_bbox_targets
         bbox_weights[:num_pos, :] = 1
     if num_neg > 0:
         label_weights[-num_neg:] = 1.0
-    # print(f'Single BBox target shape: {bbox_targets.shape}')
 
     return labels, label_weights, bbox_targets, bbox_weights
 

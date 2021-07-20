@@ -119,17 +119,7 @@ def SOLVE_O2(delta_p, omega_p, a2, b2, beta=1.0):
         return (b2 + (omega_2 / 2), omega_2)
 
 
-def case_distinction(pred, proposal_list, cases, target, crop_shapes, axis=0, beta=1):
-    """
-
-    :param pred:
-    :param proposal_list:
-    :param cases:
-    :param target:
-    :param crop_shapes:
-    :param axis:
-    :return:
-    """
+def case_distinction(pred, proposal_list, cases, target, crop_shapes, axis=0, beta=1.):
     # depending on the axis we either optimize the target for top and bottom or left and right cuts
     # therefore depending on the axis the needed indices for coordinates and deltas are different
     if axis == 0:
@@ -218,12 +208,7 @@ class cabb(nn.Module):
         dx, dy, dw, dh
         """
 
-        # pred = pred.cpu().detach()
-        # print(f'target shape cabb\n{target.shape}')
-        # crop_shapes = crop_shapes.cpu().detach()
-        # proposal_list = proposal_list.cpu().detach()
         orig_target = bbox2delta(proposal_list, crop_info["orig_gt_left_top"])
-        # cases = crop_info["cases"].cpu().detach()
         cases = crop_info["cases"]
         # we are doing exp as cabb does not use log scale
         # TODO remove once we do no longer plot we can remove the copy or move the reversion of this to plot
@@ -231,11 +216,6 @@ class cabb(nn.Module):
         pred_copy[:, [2, 3]] = torch.exp(pred_copy[:, [2, 3]])
         target_copy = orig_target.clone()
         target_copy[:, [2, 3]] = torch.exp(target_copy[:, [2, 3]])
-
-        # assert pred.shape == orig_target.shape
-        # assert proposal_list.shape == orig_target.shape
-        # assert crop_shapes.shape[0] == orig_target.shape[0]
-        # assert pred.shape[0] == orig_target.shape[0]
         loss = 0
         for i in range(pred.shape[0]):
             label = [None, None, None, None]
@@ -249,8 +229,7 @@ class cabb(nn.Module):
             x = pred_copy[i][[0, 1]] - label[[0, 1]]
             # we dont need to do log of label even tough it is not in log notation
             # as there is a log inside the loss function
-            i_loss = bbox_loss(x, label[[2, 3]], pred_copy[i][[2, 3]])
-            loss += i_loss
+            loss += bbox_loss(x, label[[2, 3]], pred_copy[i][[2, 3]])
             if plot:
                 # we log the label only for the plotting og the loss
                 label[[2, 3]] = torch.log(label[[2, 3]])

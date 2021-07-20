@@ -179,7 +179,6 @@ class EfficientPS(BaseDetector):
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       gt_semantic_seg=None):
-
         x = self.extract_feat(img)
         losses = dict()
 
@@ -198,13 +197,9 @@ class EfficientPS(BaseDetector):
                                           self.test_cfg.rpn)
         proposal_inputs = rpn_outs + (img_metas, proposal_cfg)
         proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
-        # print(f'proposal list after rpn head shape\n{proposal_list[0].shape}')
 
         sampling_results = self.assign_result(x, proposal_list, img,
                                               gt_bboxes, gt_labels, gt_bboxes_ignore)
-        # print(f'sampling results\n{sampling_results}')
-        # for res in sampling_results:
-            # print(f'res.pos_gt_labels\n{res.pos_gt_labels}')
         rois = bbox2roi([res.bboxes for res in sampling_results])
         bbox_feats = self.bbox_roi_extractor(
             x[:self.bbox_roi_extractor.num_inputs], rois)
@@ -212,62 +207,21 @@ class EfficientPS(BaseDetector):
             bbox_feats = self.shared_head(bbox_feats)
 
         cls_score, bbox_pred = self.bbox_head(bbox_feats)
-        crop_info["cases"] = self.bbox_head.get_cases_per_prediction(crop_info["cases"], sampling_results)
-        proposal_list = self.bbox_head.get_associated_anchors(sampling_results)
-        # print(f"in efficientPS these are the assigned anchors:\n"
-        #      f"{proposal_list}")
-        # What we checked: the anchors used to compute the deltas of the target are exactly the same and in the same
-        # order as the anchors we compute n get_associated_anchors, so later in the loss we have the right
-        # anchor for each gt, especially when computing the new targets (cabb)
-        # both in coord format top left bot right
-
-        # todo print those
-
         bbox_targets = self.bbox_head.get_target(sampling_results,
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
-        # print(f'bbox_targets (gts)\n{bbox_targets[2].shape}')
-        # print(f'bbox_targets (labels)\n{bbox_targets[0]}')
-
-        # DEBUGGUNG
-        labels, label_weights, bbox_targets_intern, bbox_weights = bbox_targets
-        pos_inds = labels > 0
-        pos_targets = bbox_targets_intern[pos_inds.type(torch.bool)]
-        pos_proposals = [res.pos_bboxes for res in sampling_results]
-        pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
-        # print(f"this is the pos targets:\n"
-        #      f"{pos_targets}")
-        # print(f"this is the pos_proposals:\n"
-        #      f"{pos_proposals}")
-        coord_pos_targets = delta2bbox(pos_proposals[0], pos_targets)
-        coord_with_mean = delta2bbox(pos_proposals[0], pos_targets, means=[.0, .0, .0, .0], stds=[0.1, 0.1, 0.2, 0.2])
-
-        assert len(pos_proposals[0]) == len(pos_gt_bboxes[0])
-        # print(f'img metas\n'
-        #       f'{img_metas}')
-        # for pair_id in range(len(pos_proposals[0])):
-        #     print(f"inputs gt, anchor for id {pair_id}", pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id])
-        #     self.plot_single_anchor_and_gt(img, pos_gt_bboxes[0][pair_id], pos_proposals[0][pair_id], crop_info["cases"][pair_id], mean_target=coord_with_mean[pair_id])
-        # this shows that anchor and gt_fit together visually
-
-
-
-        crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
-        crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
-        crop_info["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results, crop_info["orig_gt_left_top"])
-        loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list, sampling_results, crop_info,
-                                        *bbox_targets)
-
-
-        # get all predictions into correct form
-        img_shape = img_metas[0]['img_shape']
-        bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.bbox_head.target_means,
-                            self.bbox_head.target_stds, img_shape)
-
-        # plot positive predictions, positive anchors and ground truth boxes
-        # self.plot_anchors(img, [sampling_results[0].pos_bboxes], 'b')
-        # self.plot_anchors_and_gt(img, gt_bboxes, [bboxes.detach()[:sampling_results[0].pos_bboxes.shape[0]]], crop_info["cases"])
-
+        if self.bbox_head.using_cabb:
+            # when using cabb we need to prepare additional information regarding where and how a gt box was cropped
+            crop_info["cases"] = self.bbox_head.get_cases_per_prediction(crop_info["cases"], sampling_results)
+            proposal_list = self.bbox_head.get_associated_anchors(sampling_results)
+            crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
+            crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
+            crop_info["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results,
+                                                                               crop_info["orig_gt_left_top"])
+            loss_bbox = self.bbox_head.loss(img_metas, cls_score, bbox_pred, crop_shapes, proposal_list,
+                                            sampling_results, crop_info, *bbox_targets)
+        else:
+            loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, *bbox_targets)
         losses.update(loss_bbox)
 
         pos_rois = bbox2roi(
