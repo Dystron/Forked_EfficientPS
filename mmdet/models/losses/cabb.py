@@ -36,9 +36,13 @@ def batched_bbox_loss(pred, target, proposal_list, cases, crop_shapes, crop_info
     losses = torch.zeros([pred.shape[0], 4], dtype=torch.float32, device="cuda")
     for i in range(pred.shape[0]):
         if pred[i][2] <= 0:
-            pred[i][2] = torch.clip(pred[i][2], sys.float_info.min, sys.float_info.max)
+            pred[i][2] = 0.000001
+        elif pred[i][2] > 1e10:
+            pred[i][2] = 1e10
         if pred[i][3] <= 0:
-            pred[i][3] = torch.clip(pred[i][3], sys.float_info.min, sys.float_info.max)
+            pred[i][3] = 0.000001
+        elif pred[i][3] > 1e10:
+            pred[i][3] = 1e10
         label = [None, None, None, None]
         # optimize in x
         label[0], label[2] = case_distinction(pred[i], proposal_list[i], cases[i], target[i],

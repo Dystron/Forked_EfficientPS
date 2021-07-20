@@ -384,7 +384,7 @@ class RandomCrop(object):
         crop_y1, crop_y2 = offset_h, offset_h + self.crop_size[0]
         crop_x1, crop_x2 = offset_w, offset_w + self.crop_size[1]
         # TODO remove
-        results["crop_info"]["orig_image"] = img.copy()
+        #results["crop_info"]["orig_image"] = img.copy()
         # crop the image
         img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
         img_shape = img.shape
