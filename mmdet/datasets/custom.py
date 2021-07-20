@@ -127,6 +127,7 @@ class CustomDataset(Dataset):
         return np.random.choice(pool)
 
     def __getitem__(self, idx):
+        idx = 14
         if self.test_mode:
             return self.prepare_test_img(idx)
         while True:

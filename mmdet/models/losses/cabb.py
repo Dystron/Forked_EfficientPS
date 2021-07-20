@@ -30,6 +30,41 @@ def bbox_loss(x, omega, omega_p, beta=1.0):
 
 
 @weighted_loss
+def batched_bbox_loss(pred, target, proposal_list, cases, crop_shapes, crop_info, plot, beta):
+    # returns a batch sized loss collection
+    losses = torch.zeros([pred.shape[0], 4], dtype=torch.float32, device="cuda")
+    for i in range(pred.shape[0]):
+        label = [None, None, None, None]
+        # optimize in x
+        label[0], label[2] = case_distinction(pred[i], proposal_list[i], cases[i], target[i],
+                                              crop_shapes[i], axis=0, beta=beta)
+        # optimize in y
+        label[1], label[3] = case_distinction(pred[i], proposal_list[i], cases[i], target[i],
+                                              crop_shapes[i], axis=1, beta=beta)
+        label = torch.tensor(label, device="cuda")
+        # we dont need to do log of label even tough it is not in log notation
+        # as there is a log inside the loss function
+        losses[i] = smooth_l1_loss_original(pred[i], target[i], beta=beta)
+        if plot:
+            # we log the label only for the plotting og the loss
+            label[[2, 3]] = torch.log(label[[2, 3]])
+            pred[i][[2, 3]] = torch.log(pred[i][[2, 3]])
+            target[i][[2, 3]] = torch.log(target[i][[2, 3]])
+
+            plot_anchors_and_gt(crop_info["orig_image"], target[i], proposal_list[i], label, pred[i],
+                                *crop_info["crop_left_top"], crop_shapes[i], crop_info["cases"][i])
+    return losses
+
+
+def smooth_l1_loss_original(pred, target, beta=1.0):
+    assert beta > 0
+    assert pred.size() == target.size() and target.numel() > 0
+    diff = torch.abs(pred - target)
+    loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
+                       diff - 0.5 * beta)
+    return loss
+
+
 def smooth_l1_loss(x, beta=1.0):
     assert beta > 0
     diff = torch.abs(x)
@@ -62,7 +97,8 @@ def J_getter(i, omega_0=None, omega_p=None, beta=None, omega_hat=None):
     if i == 1:
         return [max(omega_0, omega_p), min(torch.exp(torch.tensor(min(beta, 1), device="cuda")) * omega_p, omega_hat)]
     if i == 2:
-        return [max(omega_0, 2 * torch.sqrt(torch.tensor(beta, device="cuda")), omega_hat - 2 * beta, torch.exp(torch.tensor(beta, device="cuda")) * omega_p),
+        return [max(omega_0, 2 * torch.sqrt(torch.tensor(beta, device="cuda")), omega_hat - 2 * beta,
+                    torch.exp(torch.tensor(beta, device="cuda")) * omega_p),
                 omega_hat]
     if i == 3:
         return [max(omega_0, omega_hat - 2 * beta, torch.tensor(np.e, device="cuda") * omega_p),
@@ -101,7 +137,8 @@ def SOLVE_O1(omega_p, omega_hat, a1, b1, beta=1.0):
     for val in S:
         if val <= 0:
             print(f"value {val} not allowed in S {S}, {omega_p, omega_hat, a1, b1}")
-    return S[torch.argmin(torch.tensor([xi(omega=cur, omega_p=omega_p, omega_hat=omega_hat) for cur in S], device="cuda"))]
+    return S[
+        torch.argmin(torch.tensor([xi(omega=cur, omega_p=omega_p, omega_hat=omega_hat) for cur in S], device="cuda"))]
 
 
 def SOLVE_O2(delta_p, omega_p, a2, b2, beta=1.0):
@@ -116,7 +153,7 @@ def SOLVE_O2(delta_p, omega_p, a2, b2, beta=1.0):
             xi(omega=omega_2, omega_p=omega_p, omega_hat=omega_hat2):
         return (a2 + (omega_1 / 2), omega_1)
     else:
-        return (b2 + (omega_2 / 2), omega_2)
+        return (b2 - (omega_2 / 2), omega_2)
 
 
 def case_distinction(pred, proposal_list, cases, target, crop_shapes, axis=0, beta=1.):
@@ -195,10 +232,9 @@ class cabb(nn.Module):
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
-                plot=False,
+                plot=True,
                 **kwargs):
-        # TODO remove
-        # assert reduction_override in (None, 'none', 'mean', 'sum')
+        assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
         """
@@ -216,84 +252,70 @@ class cabb(nn.Module):
         pred_copy[:, [2, 3]] = torch.exp(pred_copy[:, [2, 3]])
         target_copy = orig_target.clone()
         target_copy[:, [2, 3]] = torch.exp(target_copy[:, [2, 3]])
-        loss = 0
-        for i in range(pred.shape[0]):
-            label = [None, None, None, None]
-            # optimize in x
-            label[0], label[2] = case_distinction(pred_copy[i], proposal_list[i], cases[i], target_copy[i],
-                                                  crop_shapes[i], axis=0, beta=self.beta)
-            # optimize in y
-            label[1], label[3] = case_distinction(pred_copy[i], proposal_list[i], cases[i], target_copy[i],
-                                                  crop_shapes[i], axis=1, beta=self.beta)
-            label = torch.tensor(label, device="cuda")
-            x = pred_copy[i][[0, 1]] - label[[0, 1]]
-            # we dont need to do log of label even tough it is not in log notation
-            # as there is a log inside the loss function
-            loss += bbox_loss(x, label[[2, 3]], pred_copy[i][[2, 3]])
-            if plot:
-                # we log the label only for the plotting og the loss
-                label[[2, 3]] = torch.log(label[[2, 3]])
-                self.plot_anchors_and_gt(crop_info["orig_image"], orig_target[i], proposal_list[i], label, pred[i],
-                                         *crop_info["crop_left_top"], crop_shapes[i], crop_info["cases"][i])
-        loss /= pred_copy.shape[0]
-
+        loss = self.loss_weight * batched_bbox_loss(pred=pred_copy, target=target_copy, proposal_list=proposal_list,
+                                                    cases=cases, crop_shapes=crop_shapes,
+                                                    crop_info=crop_info, plot=plot, beta=self.beta, weight=weight,
+                                                    reduction=reduction,
+                                                    avg_factor=avg_factor,
+                                                    **kwargs)
         # TODO remove MORE EFFICIENT SLICE IN X DIM -->4 CASES THEN CONCAT THEN SLICE IN Y DIM --> 4 CASES
-        # todo do we want to multiply this with a loss weight as in smoothl1loss?
         return loss
 
-    def rect_crop_to_original(self, bbox0, bbox1, bbox2, bbox3, crop_left_x, crop_top_y, ec, ls):
-        return patches.Rectangle((bbox0 + crop_left_x, bbox1 + crop_top_y),
-                                 bbox2 - bbox0, bbox3 - bbox1,
-                                 linewidth=1, edgecolor=ec,
-                                 linestyle=ls, facecolor='none')
 
-    def plot_anchors_and_gt(self, img, gt, anchor, label, prediction, crop_left_x, crop_top_y, wh, case):
-        case = case.cpu()
-        fig, ax = plt.subplots()
-        ax.imshow(img[0].cpu().numpy())
-        gt = delta2bbox(anchor.unsqueeze(0), gt.unsqueeze(0))[0]
-        prediction = delta2bbox(anchor.unsqueeze(0), prediction.unsqueeze(0))[0]
-        label = delta2bbox(anchor.unsqueeze(0), torch.tensor(label).unsqueeze(0))[0]
-        bbox = anchor.cpu().numpy()
-        ax.add_artist(
-            self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="r", ls="-"))
+def rect_crop_to_original(bbox0, bbox1, bbox2, bbox3, crop_left_x, crop_top_y, ec, ls):
+    return patches.Rectangle((bbox0 + crop_left_x, bbox1 + crop_top_y),
+                             bbox2 - bbox0, bbox3 - bbox1,
+                             linewidth=1, edgecolor=ec,
+                             linestyle=ls, facecolor='none')
 
-        bbox = gt.cpu().numpy()
-        ax.add_artist(
-            self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="b", ls="-."))
 
-        bbox = prediction.cpu().detach().numpy()
-        ax.add_artist(
-            self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="g", ls="--"))
+def plot_anchors_and_gt(img, gt, anchor, label, prediction, crop_left_x, crop_top_y, wh, case):
+    case = case.cpu()
+    fig, ax = plt.subplots()
+    ax.imshow(img[0].cpu().numpy())
+    gt = delta2bbox(anchor.unsqueeze(0), gt.unsqueeze(0))[0]
+    prediction = delta2bbox(anchor.unsqueeze(0), prediction.unsqueeze(0))[0]
+    label = delta2bbox(anchor.unsqueeze(0), torch.tensor(label).unsqueeze(0))[0]
+    bbox = anchor.cpu().numpy()
+    ax.add_artist(
+        rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="r", ls="-"))
 
-        bbox = label.cpu().numpy()
-        rect = self.rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="y", ls=":")
-        ax.add_artist(rect)
+    bbox = gt.cpu().numpy()
+    ax.add_artist(
+        rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="b", ls="-."))
 
-        rect = patches.Rectangle((crop_left_x, crop_top_y),
-                                 wh[0].cuda(), wh[1].cuda(),
-                                 linewidth=1, edgecolor="c",
-                                 linestyle="-", facecolor='none')
-        ax.add_artist(rect)
+    bbox = prediction.cpu().detach().numpy()
+    ax.add_artist(
+        rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="g", ls="--"))
 
-        rx, ry = rect.get_xy()
-        cx = rx + rect.get_width() / 2.0
-        cy = ry + rect.get_height() / 2.0
-        text_case = "crop at: "
-        if torch.equal(case, torch.tensor([0., 0., 0., 0.])):
-            text_case += "none"
-        else:
-            if torch.equal(case[0], torch.tensor(1., )):
-                text_case += "left "
-            if torch.equal(case[1], torch.tensor(1.)):
-                text_case += "right "
-            if torch.equal(case[2], torch.tensor(1.)):
-                text_case += "top "
-            if torch.equal(case[3], torch.tensor(1.)):
-                text_case += "bottom "
+    bbox = label.cpu().numpy()
+    rect = rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="y", ls=":")
+    ax.add_artist(rect)
 
-        ax.annotate(text_case, (cx, cy), color='m', weight='bold',
-                    fontsize=6, ha='center', va='center')
+    rect = patches.Rectangle((crop_left_x, crop_top_y),
+                             wh[0].cuda(), wh[1].cuda(),
+                             linewidth=1, edgecolor="c",
+                             linestyle="-", facecolor='none')
+    ax.add_artist(rect)
 
-        plt.title("anchor in red, gt in blue, prediction in green, cabb target in yellow")
-        plt.show()
+    rx, ry = rect.get_xy()
+    cx = rx + rect.get_width() / 2.0
+    cy = ry + rect.get_height() / 2.0
+    text_case = "crop at: "
+    if torch.equal(case, torch.tensor([0., 0., 0., 0.])):
+        text_case += "none"
+    else:
+        if torch.equal(case[0], torch.tensor(1., )):
+            text_case += "left "
+        if torch.equal(case[1], torch.tensor(1.)):
+            text_case += "right "
+        if torch.equal(case[2], torch.tensor(1.)):
+            text_case += "top "
+        if torch.equal(case[3], torch.tensor(1.)):
+            text_case += "bottom "
+
+    ax.annotate(text_case, (cx, cy), color='m', weight='bold',
+                fontsize=6, ha='center', va='center')
+
+    plt.title("anchor in red, gt in blue, prediction in green, cabb target in yellow")
+    plt.show()
