@@ -5,7 +5,8 @@ import numpy as np
 import pycocotools.mask as maskUtils
 
 from ..registry import PIPELINES
-
+# TODO remove
+from matplotlib import pyplot as plt
 
 @PIPELINES.register_module
 class LoadImageFromFile(object):
@@ -20,7 +21,9 @@ class LoadImageFromFile(object):
                                 results['img_info']['filename'])
         else:
             filename = results['img_info']['filename']
-        img = mmcv.imread(filename, self.color_type)
+        # TODO remove changed call here commented out is orig
+        # img = mmcv.imread(filename, self.color_type)
+        img = mmcv.imread(filename, self.color_type, channel_order="rgb")
         if self.to_float32:
             img = img.astype(np.float32)
         results['filename'] = filename

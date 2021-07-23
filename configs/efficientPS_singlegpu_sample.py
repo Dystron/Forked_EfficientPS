@@ -9,7 +9,7 @@ model = dict(
         style='pytorch'),
     neck=dict(
         type='TWOWAYFPN',
-        in_channels=[40, 64, 176, 2048], #b0[24, 40, 112, 1280], #b4[32, 56, 160, 1792],
+        in_channels=[24, 40, 112, 1280], #b0[24, 40, 112, 1280], #b4[32, 56, 160, 1792],
         out_channels=256,
         norm_cfg=dict(type='InPlaceABN', activation='leaky_relu', activation_param=0.01, requires_grad=True),
         act_cfg=None,
@@ -162,8 +162,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    imgs_per_gpu=4,
-    workers_per_gpu=4,
+    imgs_per_gpu=2,
+    workers_per_gpu=1,
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/train.json',

@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -107,6 +108,40 @@ class BBoxHead(nn.Module):
             org_target_for_each_pred = original_targets[i]["orig_gt_left_top"][res.pos_assigned_gt_inds, :].cuda()
             org_targets = torch.cat((org_targets, org_target_for_each_pred))
         return org_targets
+
+    def get_original_images(self, sampling_results, original_images):
+        max_shapes = [0, 0]
+        pos_ids = 0
+        for i, res in enumerate(sampling_results):
+            org_img_for_each_pred = torch.tensor(original_images[i]["orig_image"], device="cuda")
+            size = org_img_for_each_pred.shape
+            if size[0] > max_shapes[0]:
+                max_shapes[0] = size[0]
+            if size[1] > max_shapes[1]:
+                max_shapes[1] = size[1]
+            pos_ids += len(res.pos_assigned_gt_inds)
+        org_imgs = torch.tensor(np.zeros((pos_ids, max_shapes[0], max_shapes[1], 3)), device="cuda")
+        done = 0
+        for i, res in enumerate(sampling_results):
+            org_img_for_each_pred = torch.tensor(original_images[i]["orig_image"], device="cuda")
+            for j in range(done, done + len(res.pos_assigned_gt_inds)):
+                org_imgs[j][:np.array(org_img_for_each_pred.cpu().shape[0]),
+                :np.array(org_img_for_each_pred.cpu().shape[1]), :] = org_img_for_each_pred
+            done += len(res.pos_assigned_gt_inds)
+        return org_imgs
+
+    def stack_top_left(self, sampling_results, original_top_lefts):
+        pos_ids = 0
+        for i, res in enumerate(sampling_results):
+            pos_ids += len(res.pos_assigned_gt_inds)
+        stacked_top_lefts = torch.empty((pos_ids, 2))
+        done = 0
+        for i, res in enumerate(sampling_results):
+            top_left = torch.tensor(original_top_lefts[i]["crop_left_top"], device="cuda")
+            for j in range(len(res.pos_assigned_gt_inds)):
+                stacked_top_lefts[done + j] =  top_left
+            done += len(res.pos_assigned_gt_inds)
+        return stacked_top_lefts
 
     def get_crop_dimensions(self, crop_shapes, sampling_results):
         """
