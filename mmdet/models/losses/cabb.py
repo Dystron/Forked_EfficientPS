@@ -35,8 +35,8 @@ def batched_bbox_loss(pred, target, proposal_list, cases, crop_shapes, crop_info
     # returns a batch sized loss collection
     losses = torch.zeros([pred.shape[0], 4], dtype=torch.float32, device="cuda")
     for i in range(pred.shape[0]):
-        # if i != 1:
-        #     continue
+        if i != 18:
+            continue
         if pred[i][2] <= 0:
             pred[i][2] = 0.000001
         elif pred[i][2] > 1e10:
@@ -49,10 +49,10 @@ def batched_bbox_loss(pred, target, proposal_list, cases, crop_shapes, crop_info
         # optimize in x
         # torch.tensor([-0.3,  -0.2,  1.6,  0.9867], device='cuda')
         # the_pred = torch.tensor([-0.0059,  0.0056,  1.0079,  0.9867], device='cuda:0')
-        # the_target = torch.tensor([-0.3266, -0.2422, 1.6531, 1.4844], device='cuda:0')
-        # the_fake = torch.tensor([-0.2,  -0.1,  1.3,  1.2], device='cuda:0')
-        # the_fake2 = torch.tensor([0.0000, 0.5, 1.0000, 1.6184], device='cuda:0')
-        # pred[i] = the_fake2
+        # the_target = torch.tensor([-0.3266, -0.2422,  1.6531,  1.4844], device='cuda:0')
+        the_fake = torch.tensor([-0.2,  -0.1,  1.3,  1.2], device='cuda:0')
+        the_fake2 = torch.tensor([-0.2,  -0.1,  1.3,  1.3], device='cuda:0')
+        pred[i] = the_fake2
         label[0], label[2] = case_distinction(pred[i], proposal_list[i], cases[i], target[i],
                                               crop_shapes[i], axis=0, beta=beta)
         # optimize in y
@@ -67,9 +67,14 @@ def batched_bbox_loss(pred, target, proposal_list, cases, crop_shapes, crop_info
             label[[2, 3]] = torch.log(label[[2, 3]])
             pred[i][[2, 3]] = torch.log(pred[i][[2, 3]])
             target[i][[2, 3]] = torch.log(target[i][[2, 3]])
-
-            plot_anchors_and_gt(crop_info["orig_image"][i], target[i], proposal_list[i], label, pred[i],
-                                *crop_info["crop_left_top"][i], crop_shapes[i], crop_info["cases"][i])
+            try:
+                plot_anchors_and_gt(crop_info["orig_image"][i], target[i], proposal_list[i], label, pred[i],
+                                *crop_info["crop_left_top"][i], crop_shapes[i], crop_info["cases"][i], name="unnamed")
+            except KeyError:
+                raise KeyError("No original image was found in the crop infos, you can add it by setting "
+                              "transfer_crop_info=True, transfer_img=False in the config for RandomCrop. "
+                               "The Image is only needed for plotting, you can deativate plotting by setting "
+                               "plot=False for cabb.forward")
     return losses
 
 
@@ -244,7 +249,7 @@ class cabb(nn.Module):
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
-                plot=True,
+                plot=False,
                 **kwargs):
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
@@ -258,6 +263,13 @@ class cabb(nn.Module):
         l1_target = target
         target = bbox2delta(proposal_list, crop_info["orig_gt_left_top"])
         cases = crop_info["cases"]
+
+        # img_id = 18
+        # plot_anchors_and_gt(crop_info["orig_image"][img_id], l1_target[img_id], proposal_list[img_id], None,
+        #                     pred[img_id],
+        #                     *crop_info["crop_left_top"][img_id], crop_shapes[img_id], crop_info["cases"][img_id],
+        #                     name="unaware_fine")
+
         # we are doing exp as cabb does not use log scale
         pred[:, [2, 3]] = torch.exp(pred[:, [2, 3]])
         target[:, [2, 3]] = torch.exp(target[:, [2, 3]])
@@ -267,11 +279,7 @@ class cabb(nn.Module):
                                                     reduction=reduction,
                                                     avg_factor=avg_factor,
                                                     **kwargs)
-        # img_id = 1
-        # # pred[img_id][[2, 3]] = torch.log(pred[img_id][[2, 3]])
-        #
-        # plot_anchors_and_gt(crop_info["orig_image"][img_id], l1_target[img_id], proposal_list[img_id], None, pred[img_id],
-        #                     *crop_info["crop_left_top"][img_id], crop_shapes[img_id], crop_info["cases"][img_id], name="unaware2")
+
         return loss
 
 
@@ -286,15 +294,7 @@ def plot_anchors_and_gt(img, gt, anchor, label, prediction, crop_left_x, crop_to
     case = case.cpu()
     fig, ax = plt.subplots()
     img = img.type(torch.int).cpu().numpy()
-    # img = img[:,:,2]
-    # for i in range(img.shape[0]):
-    #     for j in range(img.shape[1]):
-    #         rgb = img[i][j]
-    #         img[i][j][0] = rgb[2]
-    #         img[i][j][1] = rgb[1]
-    #         img[i][j][2] = rgb[0]
-    image = ax.imshow(img, cmap="magma")
-    # fig.colorbar(image)
+    ax.imshow(img, cmap="magma")
     gt = delta2bbox(anchor.unsqueeze(0), gt.unsqueeze(0))[0]
     prediction = delta2bbox(anchor.unsqueeze(0), prediction.unsqueeze(0))[0]
     if not label is None:
@@ -303,24 +303,23 @@ def plot_anchors_and_gt(img, gt, anchor, label, prediction, crop_left_x, crop_to
     ax.add_artist(
         rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="r", ls="-"))
 
-    bbox = gt.cpu().numpy()
-    ax.add_artist(
-        rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="b", ls="-."))
 
     bbox = prediction.cpu().detach().numpy()
     ax.add_artist(
         rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="g", ls="--"))
-
-    if not label is None:
-        bbox = label.cpu().numpy()
-        rect = rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="y", ls=":")
-        ax.add_artist(rect)
 
     rect = patches.Rectangle((crop_left_x, crop_top_y),
                              wh[0].cuda(), wh[1].cuda(),
                              linewidth=1, edgecolor="c",
                              linestyle="-", facecolor='none')
     ax.add_artist(rect)
+    bbox = gt.cpu().numpy()
+    ax.add_artist(
+        rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="b", ls="-."))
+    if not label is None:
+        bbox = label.cpu().numpy()
+        rect = rect_crop_to_original(bbox[0], bbox[1], bbox[2], bbox[3], crop_left_x, crop_top_y, ec="y", ls=":")
+        ax.add_artist(rect)
 
     rx, ry = rect.get_xy()
     cx = rx + rect.get_width() / 2.0

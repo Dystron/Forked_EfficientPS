@@ -175,7 +175,7 @@ class EfficientPS(BaseDetector):
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      crop_info,
+                      crop_info = None,
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       gt_semantic_seg=None):
@@ -211,6 +211,9 @@ class EfficientPS(BaseDetector):
                                                  gt_bboxes, gt_labels,
                                                  self.train_cfg.rcnn)
         if self.bbox_head.using_cabb:
+            if crop_info == None:
+                raise Exception(f"using_cabb flag was {self.bbox_head.using_cabb} in bbox_head but crop_info was None."
+                                f" Try setting transfer_crop_info=True in RandomCrop's config to transfer the info")
             # crop_info_cat = {"crop_left_top": crop_info["crop_left_top"], "orig_image": crop_info["orig_image"]}
             crop_info_cat = {}
             # when using cabb we need to prepare additional information regarding where and how a gt box was cropped
@@ -219,7 +222,10 @@ class EfficientPS(BaseDetector):
             crop_shapes = [img_metas[i]["img_shape"] for i in range(len(img_metas))]
             crop_shapes = self.bbox_head.get_crop_dimensions(crop_shapes, sampling_results)
             crop_info_cat["orig_gt_left_top"] = self.bbox_head.get_original_target(sampling_results, crop_info)
-            crop_info_cat["orig_image"] = self.bbox_head.get_original_images(sampling_results, crop_info)
+            try:
+                crop_info_cat["orig_image"] = self.bbox_head.get_original_images(sampling_results, crop_info)
+            except KeyError:
+                pass
             crop_info_cat["crop_left_top"] = self.bbox_head.stack_top_left(sampling_results, crop_info)
             loss_bbox = self.bbox_head.loss(cls_score, bbox_pred, crop_shapes, proposal_list, crop_info_cat, *bbox_targets)
         else:

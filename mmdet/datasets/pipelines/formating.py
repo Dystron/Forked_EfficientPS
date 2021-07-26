@@ -188,7 +188,8 @@ class Collect(object):
         data['img_metas'] = DC(img_meta, cpu_only=True)
         if "crop_info" in results:
             for key in self.crop_keys:
-                crop_info[key] = results["crop_info"][key]
+                if key in results["crop_info"]:
+                    crop_info[key] = results["crop_info"][key]
             data['crop_info'] = DC(crop_info, cpu_only=True)
         for key in self.keys:
             data[key] = results[key]
