@@ -82,6 +82,10 @@ def smooth_l1_loss_original(pred, target, beta=1.0):
     diff = torch.abs(pred - target)
     loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
                        diff - 0.5 * beta)
+    if loss[2] >= 100:
+        loss[2] = 100
+    if loss[3] >= 100:
+        loss[3] = 100
     return loss
 
 
