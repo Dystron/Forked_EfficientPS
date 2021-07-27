@@ -13,14 +13,14 @@ model = dict(
         out_channels=256,
         norm_cfg=dict(type='InPlaceABN', activation='leaky_relu', activation_param=0.01, requires_grad=True),
         act_cfg=None,
-        num_outs=4),
+        num_outs=5),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
         feat_channels=256,
         anchor_scales=[8],
         anchor_ratios=[0.5, 1.0, 2.0],
-        anchor_strides=[4, 8, 16, 32],
+        anchor_strides=[4, 8, 16, 32, 64],
         target_means=[.0, .0, .0, .0],
         target_stds=[1.0, 1.0, 1.0, 1.0],
         loss_cls=dict(
@@ -162,8 +162,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    imgs_per_gpu=1,
-    workers_per_gpu=1,
+    imgs_per_gpu=8,
+    workers_per_gpu=8,
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/train.json',
@@ -195,7 +195,7 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
     step=[90, 140])
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=10)
 # yapf:disable
 log_config = dict(
     interval=1,
